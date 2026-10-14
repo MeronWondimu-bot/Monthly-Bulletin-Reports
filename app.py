@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Sidebar Navigation (Using the requested 2-item menu)
+# Sidebar Navigation (Exact Menu requested)
 st.sidebar.title("📊 Bi-weekly Monthly Reports Menu")
 report_selection = st.sidebar.radio(
     "Select Report:",
@@ -20,7 +20,7 @@ report_selection = st.sidebar.radio(
     ],
 )
 
-# Header Mapping for Clean Bank Names
+# Comprehensive Header Mapping for Bank Names
 HEADER_MAPPING = {
     "CBE": "CBE",
     "BOA": "BOA",
@@ -50,7 +50,7 @@ HEADER_MAPPING = {
 }
 
 
-# Helper function to parse multi-sheet decline files
+# Helper function to parse multi-sheet decline workbooks
 def process_decline_file(file):
   xls = pd.ExcelFile(file)
   daily_frames = []
@@ -123,7 +123,7 @@ elif report_selection == "1. Decline trasnactions summery":
           ["👤 Participant Contribution", "🔍 Major Causes (Response Codes)"]
       )
 
-      # Tab 1: Participant Contribution
+      # --- TAB 1: PARTICIPANT CONTRIBUTION ---
       with tab1:
         st.subheader("Decline Contribution by Participant")
         bank_totals = {}
@@ -175,7 +175,7 @@ elif report_selection == "1. Decline trasnactions summery":
             key="dl_part",
         )
 
-      # Tab 2: Major Causes
+      # --- TAB 2: MAJOR CAUSES ---
       with tab2:
         st.subheader("Major Causes of ATM Declines (Response Code Breakdown)")
         rc_col = combined_decline.columns[0]
@@ -194,7 +194,7 @@ elif report_selection == "1. Decline trasnactions summery":
               combined_decline[total_col[0]], errors="coerce"
           ).fillna(0)
         else:
-          bank_cols = combined_decline.columns[1:]
+          bank_cols = combined_decline.columns[1:-1]
           combined_decline["Total_Numeric"] = (
               combined_decline[bank_cols]
               .apply(pd.to_numeric, errors="coerce")
