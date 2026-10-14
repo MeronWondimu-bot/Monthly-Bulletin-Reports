@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Sidebar Navigation
+# Sidebar Navigation (Using the requested 2-item menu)
 st.sidebar.title("📊 Bi-weekly Monthly Reports Menu")
 report_selection = st.sidebar.radio(
     "Select Report:",
@@ -50,7 +50,7 @@ HEADER_MAPPING = {
 }
 
 
-# Helper function to parse decline files across multiple sheets
+# Helper function to parse multi-sheet decline files
 def process_decline_file(file):
   xls = pd.ExcelFile(file)
   daily_frames = []
@@ -61,7 +61,6 @@ def process_decline_file(file):
 
     df_sheet = pd.read_excel(file, sheet_name=sheet_name)
 
-    # Locate header row containing 'RC/BANK NAME'
     header_idx = None
     for idx, row in df_sheet.iterrows():
       row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
@@ -95,10 +94,10 @@ if report_selection == "Home / Overview":
   st.title("💳 EthSwitch Performance & Decline Central Dashboard")
   st.markdown("""
     Welcome to your unified automated reporting dashboard. 
-    Use the sidebar menu to navigate between your key operational reports:
+    Use the sidebar menu to navigate between your operational reports:
     
-    * **1. Decline transactions summary:** Consolidates all daily decline sheets to analyze volumes by **Participant Contribution** and **Major Causes (Response Codes)**.
-    * **2. Success Rate Ranking & Summary:** Automatically evaluates all participating banks against the **98.5% target threshold**, ranks them, and provides full summaries.
+    * **1. Decline transactions summary:** Consolidates daily sheets to display participant contributions and major cause response codes.
+    * **2. Success Rate Ranking & Summary:** Automatically evaluates participating banks against the **98.5% target threshold** and generates ranking tables.
     """)
 
 # ==========================================
@@ -120,12 +119,11 @@ elif report_selection == "1. Decline trasnactions summery":
     combined_decline = process_decline_file(decline_file)
 
     if combined_decline is not None:
-      # Create sub-tabs for Participant vs Major Causes
       tab1, tab2 = st.tabs(
           ["👤 Participant Contribution", "🔍 Major Causes (Response Codes)"]
       )
 
-      # --- TAB 1: PARTICIPANT CONTRIBUTION ---
+      # Tab 1: Participant Contribution
       with tab1:
         st.subheader("Decline Contribution by Participant")
         bank_totals = {}
@@ -165,7 +163,6 @@ elif report_selection == "1. Decline trasnactions summery":
 
         st.dataframe(display_part, use_container_width=True)
 
-        # Download Participant Excel
         out_part = io.BytesIO()
         with pd.ExcelWriter(out_part, engine="openpyxl") as writer:
           part_df.to_excel(
@@ -178,7 +175,7 @@ elif report_selection == "1. Decline trasnactions summery":
             key="dl_part",
         )
 
-      # --- TAB 2: MAJOR CAUSES ---
+      # Tab 2: Major Causes
       with tab2:
         st.subheader("Major Causes of ATM Declines (Response Code Breakdown)")
         rc_col = combined_decline.columns[0]
@@ -232,7 +229,6 @@ elif report_selection == "1. Decline trasnactions summery":
 
         st.dataframe(display_rc, use_container_width=True)
 
-        # Download Major Causes Excel
         out_rc = io.BytesIO()
         with pd.ExcelWriter(out_rc, engine="openpyxl") as writer:
           rc_summary.to_excel(writer, sheet_name="Major Causes", index=False)
@@ -317,7 +313,6 @@ elif report_selection == "2. Success Rate Ranking & Summary":
       )
       st.dataframe(display_rank, use_container_width=True)
 
-      # Download Ranking Excel
       out_rank = io.BytesIO()
       with pd.ExcelWriter(out_rank, engine="openpyxl") as writer:
         rank_df.to_excel(
