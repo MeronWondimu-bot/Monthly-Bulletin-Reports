@@ -49,6 +49,33 @@ st.markdown(
 
 st.markdown("<br>", unsafe_allow_html=True)
 
+# Define standard bank columns in exact expected order
+STANDARD_BANKS = [
+    "CBE",
+    "BOA",
+    "ABAY",
+    "DASHEN",
+    "WEGAGEN",
+    "ZEMEN",
+    "BUNNA",
+    "ENAT",
+    "DGB",
+    "LION",
+    "OIB",
+    "BRIB",
+    "UB",
+    "AIB",
+    "CBO",
+    "NIB",
+    "ADIB",
+    "ZAMZAM",
+    "HIJRA",
+    "AHADU",
+    "SINQEE",
+    "AMHARA",
+    "Tseday",
+]
+
 
 # 4. Strict Line-by-Line, RC-to-RC, Bank-to-Bank Aggregation Function
 @st.cache_data
@@ -58,7 +85,6 @@ def process_strict_daily_matrix(uploaded_files):
   precisely, removes duplicates from description tables, and aggregates them.
   """
   daily_matrices = []
-  all_banks_set = set()
   all_rcs_set = set()
 
   for file in uploaded_files:
@@ -88,40 +114,33 @@ def process_strict_daily_matrix(uploaded_files):
       # Drop duplicate RCs if the description table repeats them at the bottom
       df_day = df_day.drop_duplicates(subset=[rc_col], keep="first")
 
-      # Extract bank columns (excluding TOTAL and Unnamed)
-      bank_cols = [
-          c
-          for c in df_day.columns[1:]
-          if c.upper() != "TOTAL" and "UNNAMED" not in c.upper()
-      ]
+      # Ensure all standard banks exist in the daily dataframe columns
+      for bank in STANDARD_BANKS:
+        if bank not in df_day.columns:
+          df_day[bank] = 0
 
-      # Clean numeric values
       df_day.set_index(rc_col, inplace=True)
       df_numeric = (
-          df_day[bank_cols]
+          df_day[STANDARD_BANKS]
           .apply(pd.to_numeric, errors="coerce")
           .fillna(0)
       )
 
       all_rcs_set.update(df_numeric.index)
-      all_banks_set.update(bank_cols)
       daily_matrices.append(df_numeric)
 
   if not daily_matrices:
     return None
 
-  # Sort RCs and Banks for consistent layout
-  sorted_rcs = sorted(
-      list(all_rcs_set), key=lambda x: int(x) if x.isdigit() else 0
-  )
-  sorted_banks = sorted(list(all_banks_set))
+  # Sort RCs numerically/consistently
+  sorted_rcs = sorted(list(all_rcs_set), key=lambda x: int(x) if x.isdigit() else 0)
 
-  # Reindex all daily matrices to a master grid (RC x Bank) and sum them up
-  master_grid = pd.DataFrame(0.0, index=sorted_rcs, columns=sorted_banks)
+  # Reindex all daily matrices to master grid and sum them up
+  master_grid = pd.DataFrame(0.0, index=sorted_rcs, columns=STANDARD_BANKS)
 
   for mat in daily_matrices:
     aligned_mat = mat.reindex(
-        index=sorted_rcs, columns=sorted_banks, fill_value=0
+        index=sorted_rcs, columns=STANDARD_BANKS, fill_value=0
     )
     master_grid = master_grid.add(aligned_mat, fill_value=0)
 
@@ -130,13 +149,12 @@ def process_strict_daily_matrix(uploaded_files):
   final_df.rename(columns={final_df.columns[0]: "RC/BANK NAME"}, inplace=True)
 
   # Calculate Total column for each response code row
-  numeric_bank_cols = sorted_banks
-  final_df["Total"] = final_df[numeric_bank_cols].sum(axis=1)
+  final_df["Total"] = final_df[STANDARD_BANKS].sum(axis=1)
 
   # Calculate TOTAL summary row at the bottom
-  total_row = final_df[numeric_bank_cols].sum(numeric_only=True).to_frame().T
+  total_row = final_df[STANDARD_BANKS].sum(numeric_only=True).to_frame().T
   total_row["RC/BANK NAME"] = "TOTAL"
-  total_row["Total"] = total_row[numeric_bank_cols].sum(axis=1)
+  total_row["Total"] = total_row[STANDARD_BANKS].sum(axis=1)
 
   # Append TOTAL row
   final_df = pd.concat([final_df, total_row], ignore_index=True)
@@ -203,14 +221,14 @@ else:
           f"Successfully processed and aligned **{len(uploaded_files)} daily"
           " report files** line-by-line."
       )
-      st.markdown("### 📊 Aggregated Monthly Preview")
-      st.dataframe(master_df.head(10), use_container_width=True)
+      st.write(
+          "Select **1. ATM decline summery** from the menu above to view the"
+          " full aggregated monthly matrix."
+      )
 
     # --- 1. ATM DECLINE SUMMARY ---
     elif selected_report == "1. ATM decline summery":
-      st.subheader(
-          "1. ATM Decline Summary (Strict Line-by-Line RC & Bank Matrix)"
-      )
+      st.subheader("1. ATM Decline Summary (Monthly Aggregated Matrix)")
       st.write(
           "Complete line-by-line RC-to-RC and bank-to-bank aggregation across"
           f" {len(uploaded_files)} daily reports. Transactions exceeding"
