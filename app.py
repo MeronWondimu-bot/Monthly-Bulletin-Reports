@@ -208,10 +208,10 @@ def process_strict_daily_matrix(uploaded_files):
   return final_df
 
 
-# 5. Success Rate Processing Function (Report 2) - Reads exact "Issu. Succ. Rate" from daily files
+# 5. Success Rate Processing Function (Report 2)
 @st.cache_data
 def process_success_rate_matrix(uploaded_files):
-  """Extracts the exact Issuer Success Rate (%) row directly from each daily report."""
+  """Safely extracts the exact Issuer Success Rate (%) row from daily reports."""
   daily_success_records = []
 
   for idx, file in enumerate(uploaded_files, start=1):
@@ -221,9 +221,8 @@ def process_success_rate_matrix(uploaded_files):
     df_raw = pd.read_excel(file, header=None)
     success_row = None
 
-    # Search for the row containing "Issu. Succ. Rate" or similar success rate label in the raw file
     for r_idx, row in df_raw.iterrows():
-      row_str = " ".join(row.astype(str).values).upper()
+      row_str = " ".join([str(val) for val in row.values]).upper()
       if "ISSU" in row_str and ("SUCC" in row_str or "RATE" in row_str):
         success_row = row
         break
@@ -231,7 +230,6 @@ def process_success_rate_matrix(uploaded_files):
     bank_success_rates = {"Bank/Date": date_label}
 
     if success_row is not None:
-      # Map columns from the raw sheet
       header_row_idx = None
       for r_idx, row in df_raw.iterrows():
         if (
@@ -252,7 +250,6 @@ def process_success_rate_matrix(uploaded_files):
             col_pos = header_cols.index(bank)
             val = success_row.iloc[col_pos]
             try:
-              # Clean percentage value (e.g. '99.4%' or 0.994 -> 99.4)
               val_str = str(val).replace("%", "").strip()
               num = float(val_str)
               if num <= 1.0 and num > 0:
@@ -263,11 +260,9 @@ def process_success_rate_matrix(uploaded_files):
           else:
             bank_success_rates[bank] = 100.0
     else:
-      # Fallback if specific row is formatted differently: initialize default 100%
       for bank in STANDARD_BANKS:
         bank_success_rates[bank] = 100.0
 
-    # Compute Weighted Average across standard banks for the day
     valid_rates = [
         v for k, v in bank_success_rates.items() if k in STANDARD_BANKS
     ]
@@ -285,7 +280,6 @@ def process_success_rate_matrix(uploaded_files):
   cols = ["Bank/Date"] + STANDARD_BANKS + ["Weighted Average"]
   success_df = success_df[cols]
 
-  # Calculate Average row across all days at the bottom
   avg_row = {"Bank/Date": "Average"}
   for bank in STANDARD_BANKS + ["Weighted Average"]:
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
