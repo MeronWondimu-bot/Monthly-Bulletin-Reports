@@ -231,7 +231,7 @@ else:
           " **100** are highlighted in red."
       )
 
-      # Build custom HTML table to bypass Styler bugs and guarantee smooth rendering
+      # Build custom HTML table
       html_table = (
           "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
           " auto;'><table style='width: 100%; border-collapse: collapse; font-family:"
@@ -247,15 +247,76 @@ else:
       # Table Rows
       for idx, row in master_df.iterrows():
         is_total_row = str(row["RC/BANK NAME"]).upper() == "TOTAL"
-        row_bg = "background-color: #f9f9f9; font-weight: bold;" if is_total_row else ""
+        row_bg = (
+            "background-color: #f9f9f9; font-weight: bold;"
+            if is_total_row
+            else ""
+        )
         html_table += f"<tr style='{row_bg}'>"
 
         for col_idx, col in enumerate(master_df.columns):
           val = row[col]
           if col_idx == 0:
-            # RC/BANK NAME column
             html_table += f"<td style='border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: left;'>{val}</td>"
           else:
-            # Numeric values
             try:
-              num_val =
+              num_val = float(val)
+              formatted_val = f"{int(num_val):,}"
+              if num_val > 100:
+                html_table += f"<td style='border: 1px solid #ddd; padding: 6px; color: red; font-weight: bold;'>{formatted_val}</td>"
+              else:
+                html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{formatted_val}</td>"
+            except ValueError:
+              html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{val}</td>"
+
+        html_table += "</tr>"
+
+      html_table += "</tbody></table></div>"
+
+      # Render table via HTML
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+
+      # Download Button
+      csv_export = master_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Complete Decline Summary Report (CSV)",
+          data=csv_export,
+          file_name="strict_aligned_atm_decline_summary.csv",
+          mime="text/csv",
+      )
+
+    # --- 2. SUCCESS RATE SUMMARY ---
+    elif selected_report == "2. ATM Transaction Success Rate Summary":
+      st.subheader("2. ATM Transaction Success Rate Summary")
+      st.info(
+          "Report logic for Success Rate Summary will be populated here next."
+      )
+
+    # --- 3. SUCCESS RATE RANKING ---
+    elif selected_report == "3. ATM success rate ranking":
+      st.subheader("3. ATM Success Rate Ranking")
+      st.info(
+          "Report logic for Success Rate Ranking (vs 98.5% benchmark) will be"
+          " populated here."
+      )
+
+    # --- 4. DECLINE CONTRIBUTION BY PARTICIPANT ---
+    elif selected_report == "4. ATM decline contribution by participant":
+      st.subheader("4. ATM Decline Contribution by Participant")
+      st.info(
+          "Report logic for participant decline contribution shares will be"
+          " populated here."
+      )
+
+    # --- 5. MAJOR DECLINED TRANSACTIONS ---
+    elif selected_report == "5. Major ATM declined transactions":
+      st.subheader("5. Major ATM Declined Transactions")
+      st.info(
+          "Report logic for major response codes and error descriptions will"
+          " be populated here."
+      )
+
+  except Exception as e:
+    st.error(f"An error occurred while processing daily files: {e}")
