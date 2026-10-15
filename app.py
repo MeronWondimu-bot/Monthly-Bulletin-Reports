@@ -50,15 +50,18 @@ st.markdown(
 st.markdown("<br>", unsafe_allow_html=True)
 
 
-# 4. Processing Function for Complete Matrix & TOTAL Row
+# 4. Strict Line-by-Line, RC-to-RC, Bank-to-Bank Aggregation Function
 @st.cache_data
-def process_full_decline_matrix(uploaded_files):
-  """Aggregates daily reports, ensures all response codes and banks are included,
+def process_strict_daily_matrix(uploaded_files):
+  """Reads each daily report, aligns every line (Response Code) and column (Bank)
 
-  and appends the correct TOTAL summary row at the bottom.
+  precisely, and aggregates them into a unified master matrix.
   """
-  all_dfs = []
+  daily_matrices = []
+  all_banks_set = set()
+  all_rcs_set = set()
 
+  # First pass: parse each file into a standardized DataFrame indexed by RC and columns as Banks
   for file in uploaded_files:
     df_raw = pd.read_excel(file, header=None)
     header_row_idx = None
@@ -73,43 +76,69 @@ def process_full_decline_matrix(uploaded_files):
       df_day = pd.read_excel(file, header=header_row_idx)
       df_day.columns = [str(c).strip() for c in df_day.columns]
       rc_col = df_day.columns[0]
+
+      # Drop nulls and keep only numeric response code rows
       df_day = df_day.dropna(subset=[rc_col])
-
-      # Keep valid numeric response code rows plus any explicit 'TOTAL' row
-      df_filtered = df_day[
+      df_day = df_day[
           df_day[rc_col].astype(str).str.replace(".", "", regex=False).str.isdigit()
-          | (df_day[rc_col].astype(str).str.upper() == "TOTAL")
-      ]
-      all_dfs.append(df_filtered)
+      ].copy()
 
-  if not all_dfs:
+      # Standardize Response Code as string for alignment
+      df_day[rc_col] = df_day[rc_col].astype(str).str.strip()
+
+      # Extract bank columns (excluding TOTAL and Unnamed)
+      bank_cols = [
+          c
+          for c in df_day.columns[1:]
+          if c.upper() != "TOTAL" and "UNNAMED" not in c.upper()
+      ]
+
+      # Clean numeric values
+      df_day.set_index(rc_col, inplace=True)
+      df_numeric = (
+          df_day[bank_cols]
+          .apply(pd.to_numeric, errors="coerce")
+          .fillna(0)
+      )
+
+      all_rcs_set.update(df_numeric.index)
+      all_banks_set.update(bank_cols)
+      daily_matrices.append(df_numeric)
+
+  if not daily_matrices:
     return None
 
-  combined = pd.concat(all_dfs, ignore_index=True)
-  rc_col = combined.columns[0]
+  # Sort RCs and Banks for consistent layout
+  sorted_rcs = sorted(list(all_rcs_set), key=lambda x: int(x) if x.isdigit() else 0)
+  sorted_banks = sorted(list(all_banks_set))
 
-  # Separate the TOTAL row if it exists, sum the rest by Response Code, then re-add TOTAL
-  if "TOTAL" in combined[rc_col].astype(str).str.upper().values:
-    # Drop existing total rows to re-compute accurately across all days
-    combined_clean = combined[
-        ~combined[rc_col].astype(str).str.upper().str.contains("TOTAL")
-    ]
-    aggregated_df = combined_clean.groupby(rc_col, as_index=False).sum(
-        numeric_only=True
-    )
+  # Reindex all daily matrices to a master grid (RC x Bank) and sum them up
+  master_grid = pd.DataFrame(0.0, index=sorted_rcs, columns=sorted_banks)
 
-    # Compute new TOTAL row (sum of all columns)
-    total_row = aggregated_df.sum(numeric_only=True).to_frame().T
-    total_row[rc_col] = "TOTAL"
-    aggregated_df = pd.concat(
-        [aggregated_df, total_row], ignore_index=True
+  for mat in daily_matrices:
+    # Reindex to master grid, filling missing RCs or Banks with 0
+    aligned_mat = mat.reindex(
+        index=sorted_rcs, columns=sorted_banks, fill_value=0
     )
-  else:
-    aggregated_df = combined.groupby(rc_col, as_index=False).sum(
-        numeric_only=True
-    )
+    master_grid = master_grid.add(aligned_mat, fill_value=0)
 
-  return aggregated_df
+  # Reset index to make RC/BANK NAME a regular column
+  final_df = master_grid.reset_index()
+  final_df.rename(columns={final_df.columns[0]: "RC/BANK NAME"}, inplace=True)
+
+  # Calculate Total column for each response code row
+  numeric_bank_cols = sorted_banks
+  final_df["Total"] = final_df[numeric_bank_cols].sum(axis=1)
+
+  # Calculate TOTAL summary row at the bottom
+  total_row = final_df[numeric_bank_cols].sum(numeric_only=True).to_frame().T
+  total_row["RC/BANK NAME"] = "TOTAL"
+  total_row["Total"] = total_row[numeric_bank_cols].sum(axis=1)
+
+  # Append TOTAL row
+  final_df = pd.concat([final_df, total_row], ignore_index=True)
+
+  return final_df
 
 
 # 5. Styling Function: Highlight values > 100 in Red
@@ -162,30 +191,33 @@ if not uploaded_files:
   )
 else:
   try:
-    master_df = process_full_decline_matrix(uploaded_files)
+    master_df = process_strict_daily_matrix(uploaded_files)
 
     # --- HOME / OVERVIEW ---
     if selected_report == "Home / Overview":
       st.subheader("Welcome to the Central Dashboard")
       st.success(
-          f"Successfully processed **{len(uploaded_files)} daily report"
-          " files**."
+          f"Successfully processed and aligned **{len(uploaded_files)} daily"
+          " report files** line-by-line."
       )
       st.markdown("### 📊 Aggregated Monthly Preview")
       st.dataframe(master_df.head(10), use_container_width=True)
 
     # --- 1. ATM DECLINE SUMMARY ---
     elif selected_report == "1. ATM decline summery":
-      st.subheader("1. ATM Decline Summary (Complete Bank & Response Code Matrix)")
+      st.subheader(
+          "1. ATM Decline Summary (Strict Line-by-Line RC & Bank Matrix)"
+      )
       st.write(
-          "Complete decline breakdown for all banks and response codes."
-          " Transactions exceeding **100** are highlighted in red."
+          "Complete line-by-line RC-to-RC and bank-to-bank aggregation across"
+          f" {len(uploaded_files)} daily reports. Transactions exceeding"
+          " **100** are highlighted in red."
       )
 
       # Apply conditional styling (Red text for values > 100)
       styled_df = master_df.style.applymap(
           color_red_if_above_100,
-          subset=master_df.columns[1:],  # Apply to numeric bank columns
+          subset=master_df.columns[1:],  # Apply across all bank and total columns
       )
 
       st.dataframe(styled_df, use_container_width=True)
@@ -195,7 +227,7 @@ else:
       st.download_button(
           label="Download Complete Decline Summary Report (CSV)",
           data=csv_export,
-          file_name="complete_atm_decline_summary.csv",
+          file_name="strict_aligned_atm_decline_summary.csv",
           mime="text/csv",
       )
 
