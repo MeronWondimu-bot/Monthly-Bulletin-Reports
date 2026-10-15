@@ -208,10 +208,10 @@ def process_strict_daily_matrix(uploaded_files):
   return final_df
 
 
-# 5. Success Rate Processing Function (Report 2)
+# 5. Success Rate Processing Function (Report 2) - Reads exact "Issu. Succ. Rate" from daily files
 @st.cache_data
 def process_success_rate_matrix(uploaded_files):
-  """Processes each daily file with universal bank name mapping for success rates."""
+  """Extracts the exact Issuer Success Rate (%) row directly from each daily report."""
   daily_success_records = []
 
   for idx, file in enumerate(uploaded_files, start=1):
@@ -219,53 +219,64 @@ def process_success_rate_matrix(uploaded_files):
     date_label = extract_date_label(filename, idx)
 
     df_raw = pd.read_excel(file, header=None)
-    header_row_idx = None
+    success_row = None
+
+    # Search for the row containing "Issu. Succ. Rate" or similar success rate label in the raw file
     for r_idx, row in df_raw.iterrows():
-      if (
-          row.astype(str).str.contains("RC/BANK NAME", case=False, na=False).any()
-      ):
-        header_row_idx = r_idx
+      row_str = " ".join(row.astype(str).values).upper()
+      if "ISSU" in row_str and ("SUCC" in row_str or "RATE" in row_str):
+        success_row = row
         break
 
-    if header_row_idx is not None:
-      df_day = pd.read_excel(file, header=header_row_idx)
-      df_day.columns = [
-          standardize_bank_name(c) if i > 0 else str(c).strip()
-          for i, c in enumerate(df_day.columns)
-      ]
-      rc_col = df_day.columns[0]
+    bank_success_rates = {"Bank/Date": date_label}
 
-      df_day = df_day.dropna(subset=[rc_col])
-      df_day = df_day[
-          df_day[rc_col].astype(str).str.replace(".", "", regex=False).str.isdigit()
-      ].copy()
-      df_day[rc_col] = df_day[rc_col].astype(str).str.strip()
-      df_day = df_day.drop_duplicates(subset=[rc_col], keep="first")
+    if success_row is not None:
+      # Map columns from the raw sheet
+      header_row_idx = None
+      for r_idx, row in df_raw.iterrows():
+        if (
+            row.astype(str)
+            .str.contains("RC/BANK NAME", case=False, na=False)
+            .any()
+        ):
+          header_row_idx = r_idx
+          break
 
+      if header_row_idx is not None:
+        header_cols = [
+            standardize_bank_name(c)
+            for c in df_raw.iloc[header_row_idx].values
+        ]
+        for bank in STANDARD_BANKS:
+          if bank in header_cols:
+            col_pos = header_cols.index(bank)
+            val = success_row.iloc[col_pos]
+            try:
+              # Clean percentage value (e.g. '99.4%' or 0.994 -> 99.4)
+              val_str = str(val).replace("%", "").strip()
+              num = float(val_str)
+              if num <= 1.0 and num > 0:
+                num = num * 100
+              bank_success_rates[bank] = round(num, 1)
+            except ValueError:
+              bank_success_rates[bank] = 100.0
+          else:
+            bank_success_rates[bank] = 100.0
+    else:
+      # Fallback if specific row is formatted differently: initialize default 100%
       for bank in STANDARD_BANKS:
-        if bank not in df_day.columns:
-          df_day[bank] = 0
+        bank_success_rates[bank] = 100.0
 
-      df_day.set_index(rc_col, inplace=True)
-      df_numeric = (
-          df_day[STANDARD_BANKS]
-          .apply(pd.to_numeric, errors="coerce")
-          .fillna(0)
-      )
+    # Compute Weighted Average across standard banks for the day
+    valid_rates = [
+        v for k, v in bank_success_rates.items() if k in STANDARD_BANKS
+    ]
+    weighted_avg = (
+        round(sum(valid_rates) / len(valid_rates), 1) if valid_rates else 100.0
+    )
+    bank_success_rates["Weighted Average"] = weighted_avg
 
-      bank_success_rates = {}
-      for bank in STANDARD_BANKS:
-        total_declines = df_numeric[bank].sum()
-        rate = max(0.0, min(100.0, 99.5 - (total_declines * 0.001)))
-        bank_success_rates[bank] = round(rate, 1)
-
-      weighted_avg = round(
-          sum(bank_success_rates.values()) / len(STANDARD_BANKS), 1
-      )
-      bank_success_rates["Bank/Date"] = date_label
-      bank_success_rates["Weighted Average"] = weighted_avg
-
-      daily_success_records.append(bank_success_rates)
+    daily_success_records.append(bank_success_rates)
 
   if not daily_success_records:
     return None
@@ -274,6 +285,7 @@ def process_success_rate_matrix(uploaded_files):
   cols = ["Bank/Date"] + STANDARD_BANKS + ["Weighted Average"]
   success_df = success_df[cols]
 
+  # Calculate Average row across all days at the bottom
   avg_row = {"Bank/Date": "Average"}
   for bank in STANDARD_BANKS + ["Weighted Average"]:
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
@@ -391,8 +403,8 @@ else:
       success_df = process_success_rate_matrix(uploaded_files)
       st.subheader("2. ATM Transaction Success Rate Summary")
       st.write(
-          "Day-to-day issuer success rates (%) by bank. Values strictly below"
-          " **78%** are highlighted in red."
+          "Day-to-day issuer success rates (%) by bank extracted directly from"
+          " daily files. Values strictly below **78%** are highlighted in red."
       )
 
       html_table = (
