@@ -242,7 +242,7 @@ else:
           " **100** are highlighted in red."
       )
 
-      # Apply conditional styling and format numbers as integers without decimals
-      styled_df = (
-          master_df.style.map(
-              color_red_
+      # Apply conditional styling and format numbers as clean integers
+      styled_df = master_df.style.map(
+          color_red_if_above_100, subset=master_df.columns[1:]
+      ).format("{:,}", subset=master_
