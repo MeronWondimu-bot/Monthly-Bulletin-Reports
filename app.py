@@ -169,17 +169,6 @@ def process_strict_daily_matrix(uploaded_files):
   return final_df
 
 
-# 5. Styling Function: Highlight values > 100 in Red
-def color_red_if_above_100(val):
-  try:
-    num = float(val)
-    if num > 100:
-      return "color: red; font-weight: bold;"
-  except ValueError:
-    pass
-  return ""
-
-
 # 6. Multi-File Uploader Section
 st.markdown("### 📁 **Upload Daily Source Reports**")
 uploaded_files = st.file_uploader(
@@ -242,32 +231,31 @@ else:
           " **100** are highlighted in red."
       )
 
-      # Apply conditional styling and integer formatting cleanly on one line
-      styled_df = master_df.style.map(
-          color_red_if_above_100, subset=master_df.columns[1:]
-      ).format("{:,}", subset=master_df.columns[1:])
-
-      st.dataframe(styled_df, use_container_width=True)
-
-      # Download Button
-      csv_export = master_df.to_csv(index=False).encode("utf-8")
-      st.download_button(
-          label="Download Complete Decline Summary Report (CSV)",
-          data=csv_export,
-          file_name="strict_aligned_atm_decline_summary.csv",
-          mime="text/csv",
+      # Build custom HTML table to bypass Styler bugs and guarantee smooth rendering
+      html_table = (
+          "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
+          " auto;'><table style='width: 100%; border-collapse: collapse; font-family:"
+          " sans-serif; font-size: 13px; text-align: center;'>"
       )
 
-    # --- 2. SUCCESS RATE SUMMARY ---
-    elif selected_report == "2. ATM Transaction Success Rate Summary":
-      st.subheader("2. ATM Transaction Success Rate Summary")
-      st.info(
-          "Report logic for Success Rate Summary will be populated here next."
-      )
+      # Table Header
+      html_table += "<thead><tr style='background-color: #f2f2f2;'>"
+      for col in master_df.columns:
+        html_table += f"<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>{col}</th>"
+      html_table += "</tr></thead><tbody>"
 
-    # --- 3. SUCCESS RATE RANKING ---
-    elif selected_report == "3. ATM success rate ranking":
-      st.subheader("3. ATM Success Rate Ranking")
-      st.info(
-          "Report logic for Success Rate Ranking (vs 98.5% benchmark) will be"
-          " populated
+      # Table Rows
+      for idx, row in master_df.iterrows():
+        is_total_row = str(row["RC/BANK NAME"]).upper() == "TOTAL"
+        row_bg = "background-color: #f9f9f9; font-weight: bold;" if is_total_row else ""
+        html_table += f"<tr style='{row_bg}'>"
+
+        for col_idx, col in enumerate(master_df.columns):
+          val = row[col]
+          if col_idx == 0:
+            # RC/BANK NAME column
+            html_table += f"<td style='border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: left;'>{val}</td>"
+          else:
+            # Numeric values
+            try:
+              num_val =
