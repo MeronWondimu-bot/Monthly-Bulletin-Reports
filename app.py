@@ -242,7 +242,32 @@ else:
           " **100** are highlighted in red."
       )
 
-      # Apply conditional styling and format numbers as clean integers
+      # Apply conditional styling and integer formatting cleanly on one line
       styled_df = master_df.style.map(
           color_red_if_above_100, subset=master_df.columns[1:]
-      ).format("{:,}", subset=master_
+      ).format("{:,}", subset=master_df.columns[1:])
+
+      st.dataframe(styled_df, use_container_width=True)
+
+      # Download Button
+      csv_export = master_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Complete Decline Summary Report (CSV)",
+          data=csv_export,
+          file_name="strict_aligned_atm_decline_summary.csv",
+          mime="text/csv",
+      )
+
+    # --- 2. SUCCESS RATE SUMMARY ---
+    elif selected_report == "2. ATM Transaction Success Rate Summary":
+      st.subheader("2. ATM Transaction Success Rate Summary")
+      st.info(
+          "Report logic for Success Rate Summary will be populated here next."
+      )
+
+    # --- 3. SUCCESS RATE RANKING ---
+    elif selected_report == "3. ATM success rate ranking":
+      st.subheader("3. ATM Success Rate Ranking")
+      st.info(
+          "Report logic for Success Rate Ranking (vs 98.5% benchmark) will be"
+          " populated
