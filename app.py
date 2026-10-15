@@ -50,26 +50,44 @@ st.markdown(
 st.markdown("<br>", unsafe_allow_html=True)
 
 
-# 4. Multi-File Processing Function
+# 4. Accurate Multi-File Processing Function
 @st.cache_data
-def process_multiple_daily_files(uploaded_files):
-  """Reads multiple daily report files and aggregates them into a single summary."""
-  all_daily_dfs = []
+def process_daily_decline_files(uploaded_files):
+  """Reads multiple daily report files, detects header dynamically,
+
+  and aggregates decline counts by Response Code and Bank.
+  """
+  all_dfs = []
 
   for file in uploaded_files:
-    # Read each daily file (assuming format matches your structure where header is at row index 2)
-    df_day = pd.read_excel(file, header=2)
-    all_daily_dfs.append(df_day)
+    # Read raw without header to find 'RC/BANK NAME'
+    df_raw = pd.read_excel(file, header=None)
+    header_row_idx = None
+    for idx, row in df_raw.iterrows():
+      if (
+          row.astype(str).str.contains("RC/BANK NAME", case=False, na=False).any()
+      ):
+        header_row_idx = idx
+        break
 
-  if not all_daily_dfs:
+    if header_row_idx is not None:
+      df_day = pd.read_excel(file, header=header_row_idx)
+      # Clean column names
+      df_day.columns = [str(c).strip() for c in df_day.columns]
+      # Filter out description rows at the bottom if present (keep only numeric response codes)
+      if "RC/BANK NAME" in df_day.columns:
+        df_day = df_day.dropna(subset=["RC/BANK NAME"])
+        all_dfs.append(df_day)
+
+  if not all_dfs:
     return None
 
-  # Combine all uploaded daily reports
-  combined_df = pd.concat(all_daily_dfs, ignore_index=True)
+  # Combine all daily dataframes
+  combined = pd.concat(all_dfs, ignore_index=True)
 
-  # Group by the first column (Response Code) and sum up numeric bank values across all days
-  rc_col = combined_df.columns[0]
-  aggregated_df = combined_df.groupby(rc_col, as_index=False).sum(
+  # Group by Response Code ('RC/BANK NAME') and sum numeric values across all days
+  rc_col = combined.columns[0]
+  aggregated_df = combined.groupby(rc_col, as_index=False).sum(
       numeric_only=True
   )
 
@@ -79,10 +97,9 @@ def process_multiple_daily_files(uploaded_files):
 # 5. Multi-File Uploader Section
 st.markdown("### 📁 **Upload Daily Source Reports**")
 uploaded_files = st.file_uploader(
-    "Upload multiple daily ATM report files (Select all daily Excel files for"
-    " the month)",
+    "Upload all daily ATM decline report files for the month",
     type=["xlsx", "xls"],
-    accept_multiple_files=True,  # Allows uploading many files at once!
+    accept_multiple_files=True,
 )
 
 st.markdown("---")
@@ -116,49 +133,42 @@ if not uploaded_files:
   )
 else:
   try:
-    # Process and aggregate all daily files
-    master_decline_df = process_multiple_daily_files(uploaded_files)
+    master_df = process_daily_decline_files(uploaded_files)
 
     # --- HOME / OVERVIEW ---
     if selected_report == "Home / Overview":
       st.subheader("Welcome to the Central Dashboard")
       st.success(
-          f"Successfully uploaded and processed **{len(uploaded_files)} daily"
-          " report files**."
+          f"Successfully processed **{len(uploaded_files)} daily report"
+          " files**."
       )
-
       st.markdown("### 📊 Aggregated Monthly Preview")
-      st.dataframe(master_decline_df.head(10), use_container_width=True)
+      st.dataframe(master_df.head(10), use_container_width=True)
 
     # --- 1. ATM DECLINE SUMMARY ---
     elif selected_report == "1. ATM decline summery":
-      st.subheader("1. ATM Decline Summary (Multi-Day Aggregation)")
+      st.subheader("1. ATM Decline Summary (Multi-Day Aggregated)")
       st.write(
-          "Aggregated transaction decline response summary combining all"
-          f" uploaded daily reports ({len(uploaded_files)} files)."
+          "Totalized decline transactions for each bank and response code"
+          f" combined from {len(uploaded_files)} daily reports."
       )
 
-      # Clean column headers
-      master_decline_df.columns = [
-          str(c).strip() for c in master_decline_df.columns
-      ]
+      st.markdown("### 📊 Decline Summary Matrix")
+      st.dataframe(master_df, use_container_width=True)
 
-      st.markdown("### 📊 Combined Decline Summary Matrix")
-      st.dataframe(master_decline_df, use_container_width=True)
-
-      if "Total" in master_decline_df.columns:
-        total_declines = master_decline_df["Total"].sum()
+      if "Total" in master_df.columns:
+        total_declines = master_df["Total"].sum()
         st.metric(
             label="Total Declined Transactions (Selected Period)",
             value=f"{total_declines:,.0f}",
         )
 
       # Download Button
-      csv_export = master_decline_df.to_csv(index=False).encode("utf-8")
+      csv_export = master_df.to_csv(index=False).encode("utf-8")
       st.download_button(
-          label="Download Combined Decline Summary Report (CSV)",
+          label="Download Aggregated Decline Summary (CSV)",
           data=csv_export,
-          file_name="combined_atm_decline_summary.csv",
+          file_name="aggregated_atm_decline_summary.csv",
           mime="text/csv",
       )
 
@@ -166,8 +176,7 @@ else:
     elif selected_report == "2. ATM Transaction Success Rate Summary":
       st.subheader("2. ATM Transaction Success Rate Summary")
       st.info(
-          "Report logic for Success Rate Summary across daily uploads will be"
-          " implemented here next."
+          "Report logic for Success Rate Summary will be populated here next."
       )
 
     # --- 3. SUCCESS RATE RANKING ---
@@ -175,7 +184,7 @@ else:
       st.subheader("3. ATM Success Rate Ranking")
       st.info(
           "Report logic for Success Rate Ranking (vs 98.5% benchmark) will be"
-          " implemented here."
+          " populated here."
       )
 
     # --- 4. DECLINE CONTRIBUTION BY PARTICIPANT ---
@@ -183,7 +192,7 @@ else:
       st.subheader("4. ATM Decline Contribution by Participant")
       st.info(
           "Report logic for participant decline contribution shares will be"
-          " implemented here."
+          " populated here."
       )
 
     # --- 5. MAJOR DECLINED TRANSACTIONS ---
@@ -191,11 +200,8 @@ else:
       st.subheader("5. Major ATM Declined Transactions")
       st.info(
           "Report logic for major response codes and error descriptions will"
-          " be implemented here."
+          " be populated here."
       )
 
   except Exception as e:
-    st.error(
-        "An error occurred while processing the daily files. Please ensure"
-        f" they have matching structures. Details: {e}"
-    )
+    st.error(f"An error occurred while processing daily files: {e}")
