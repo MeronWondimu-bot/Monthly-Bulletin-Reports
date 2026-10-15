@@ -211,6 +211,7 @@ def process_strict_daily_matrix(uploaded_files):
 # 5. Success Rate Processing Function (Report 2)
 @st.cache_data
 def process_success_rate_matrix(uploaded_files):
+  """Safely extracts the exact Issuer Success Rate (%) row from daily reports."""
   daily_success_records = []
 
   for idx, file in enumerate(uploaded_files, start=1):
@@ -253,7 +254,7 @@ def process_success_rate_matrix(uploaded_files):
               num = float(val_str)
               if num <= 1.0 and num > 0:
                 num = num * 100
-              bank_success_rates[bank] = round(num, 2)
+              bank_success_rates[bank] = round(num, 1)
             except ValueError:
               bank_success_rates[bank] = 100.0
           else:
@@ -266,7 +267,7 @@ def process_success_rate_matrix(uploaded_files):
         v for k, v in bank_success_rates.items() if k in STANDARD_BANKS
     ]
     weighted_avg = (
-        round(sum(valid_rates) / len(valid_rates), 2) if valid_rates else 100.0
+        round(sum(valid_rates) / len(valid_rates), 1) if valid_rates else 100.0
     )
     bank_success_rates["Weighted Average"] = weighted_avg
 
@@ -282,7 +283,7 @@ def process_success_rate_matrix(uploaded_files):
   avg_row = {"Bank/Date": "Average"}
   for bank in STANDARD_BANKS + ["Weighted Average"]:
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
-    avg_row[bank] = round(col_vals.mean(), 2)
+    avg_row[bank] = round(col_vals.mean(), 1)
 
   success_df = pd.concat(
       [success_df, pd.DataFrame([avg_row])], ignore_index=True
@@ -293,11 +294,10 @@ def process_success_rate_matrix(uploaded_files):
 # 6. Success Rate Ranking Processing Function (Report 3)
 @st.cache_data
 def process_success_rate_ranking(success_df):
-  """Computes ranking from Report 2's Average row."""
+  """Computes ranking from Report 2's Average row with 1 decimal place."""
   if success_df is None:
     return None
 
-  # Extract the 'Average' row
   avg_row = success_df[success_df["Bank/Date"].astype(str).str.upper() == "AVERAGE"]
   if avg_row.empty:
     return None
@@ -305,22 +305,19 @@ def process_success_rate_ranking(success_df):
   ranking_data = []
   for bank in STANDARD_BANKS:
     if bank in avg_row.columns:
-      val = float(avg_row[bank].values[0])
+      val = round(float(avg_row[bank].values[0]), 1)
       target_status = "Meets target" if val >= 98.5 else "Below target"
       ranking_data.append(
           {"Participant": bank, "Success rate": val, "Target status": target_status}
       )
 
   ranking_df = pd.DataFrame(ranking_data)
-  # Sort descending by success rate
   ranking_df = ranking_df.sort_values(
       by="Success rate", ascending=False
   ).reset_index(drop=True)
-  # Assign Rank
   ranking_df.insert(0, "Rank", range(1, len(ranking_df) + 1))
-  # Format success rate as percentage string for display
   ranking_df["Success rate formatted"] = (
-      ranking_df["Success rate"].astype(str) + "%"
+      ranking_df["Success rate"].map("{:.1f}%".format)
   )
 
   return ranking_df
@@ -494,7 +491,6 @@ else:
           " against the **98.5%** target threshold."
       )
 
-      # Build custom HTML table for Ranking Report
       html_table = (
           "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
           " auto;'><table style='width: 100%; border-collapse: collapse; font-family:"
