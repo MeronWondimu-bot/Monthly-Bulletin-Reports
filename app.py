@@ -9,18 +9,95 @@ st.set_page_config(
     layout="wide",
 )
 
-# Sidebar Navigation (Exact Menu requested)
-st.sidebar.title("📊 Bi-weekly Monthly Reports Menu")
-report_selection = st.sidebar.radio(
-    "Select Report:",
-    [
-        "Home / Overview",
-        "1. Decline trasnactions summery",
-        "2. Success Rate Ranking & Summary",
-    ],
+# Custom CSS for UI styling
+st.markdown("""
+    <style>
+        .main-header {
+            font-size: 26px;
+            font-weight: bold;
+            color: #d35400;
+            text-align: center;
+            margin-bottom: 0px;
+        }
+        .sub-header {
+            font-size: 14px;
+            color: #7f8c8d;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .banner {
+            background-color: #fdf2e9;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 5px solid #d35400;
+            text-align: center;
+            font-weight: bold;
+            color: #d35400;
+            font-size: 20px;
+            margin-bottom: 25px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Top Header / Logos Section
+col_logo1, col_title, col_logo2 = st.columns([1, 3, 1])
+with col_logo1:
+  st.markdown("### 🏢 ETHSWITCH")
+with col_title:
+  st.markdown(
+      '<div class="main-header">EthSwitch Performance Reporting Hub</div>',
+      unsafe_allow_html=True,
+  )
+  st.markdown(
+      '<div class="sub-header">Automated Bi-weekly & Monthly Report'
+      " Generator</div>",
+      unsafe_allow_html=True,
+  )
+with col_logo2:
+  st.markdown("### 🐦 EthioPay")
+
+st.markdown(
+    '<div class="banner">BI-WEEKLY & MONTHLY REPORT GENERATOR</div>',
+    unsafe_allow_html=True,
 )
 
-# Comprehensive Header Mapping for Bank Names
+# ----------------------------------------------------
+# REPORT CATEGORY SELECTOR
+# ----------------------------------------------------
+st.markdown("**REPORT CATEGORY**")
+category = st.radio(
+    "Category",
+    ["Standard Reports", "MEA / Merged Reports (Temporary)"],
+    label_visibility="collapsed",
+    horizontal=True,
+)
+
+st.markdown("---")
+
+# ----------------------------------------------------
+# REPORT SELECTOR (Horizontal Pill Navigation)
+# ----------------------------------------------------
+if category == "Standard Reports":
+  st.markdown("**REPORT**")
+  report_type = st.radio(
+      "Report Type",
+      [
+          "Home / Overview",
+          "1. Decline trasnactions summery",
+          "2. Success Rate Ranking & Summary",
+      ],
+      label_visibility="collapsed",
+      horizontal=True,
+  )
+else:
+  st.info(
+      "MEA / Merged Reports category is currently empty or under development."
+  )
+  report_type = "Home / Overview"
+
+st.markdown("---")
+
+# Header Mapping for Clean Bank Names
 HEADER_MAPPING = {
     "CBE": "CBE",
     "BOA": "BOA",
@@ -90,24 +167,20 @@ def process_decline_file(file):
 # ==========================================
 # HOME / OVERVIEW
 # ==========================================
-if report_selection == "Home / Overview":
-  st.title("💳 EthSwitch Performance & Decline Central Dashboard")
+if report_type == "Home / Overview":
+  st.subheader("Welcome to the Central Dashboard")
   st.markdown("""
-    Welcome to your unified automated reporting dashboard. 
-    Use the sidebar menu to navigate between your operational reports:
+    Use the horizontal navigation above to select your report category and specific report type:
     
-    * **1. Decline transactions summary:** Consolidates daily sheets to display participant contributions and major cause response codes.
+    * **1. Decline trasnactions summery:** Consolidates daily sheets to display participant contributions and major cause response codes.
     * **2. Success Rate Ranking & Summary:** Automatically evaluates participating banks against the **98.5% target threshold** and generates ranking tables.
     """)
 
 # ==========================================
 # 1. DECLINE TRANSACTIONS SUMMARY
 # ==========================================
-elif report_selection == "1. Decline trasnactions summery":
-  st.title("📊 ATM Decline Transactions Summary")
-  st.markdown(
-      "Upload your multi-sheet monthly or daily decline workbook below."
-  )
+elif report_type == "1. Decline trasnactions summery":
+  st.subheader("📊 ATM Decline Transactions Summary")
 
   decline_file = st.file_uploader(
       "Upload ATM Decline Workbook (.xlsx / .xls)",
@@ -123,9 +196,8 @@ elif report_selection == "1. Decline trasnactions summery":
           ["👤 Participant Contribution", "🔍 Major Causes (Response Codes)"]
       )
 
-      # --- TAB 1: PARTICIPANT CONTRIBUTION ---
       with tab1:
-        st.subheader("Decline Contribution by Participant")
+        st.markdown("#### Decline Contribution by Participant")
         bank_totals = {}
         for col in combined_decline.columns:
           col_clean = str(col).strip().upper()
@@ -175,9 +247,8 @@ elif report_selection == "1. Decline trasnactions summery":
             key="dl_part",
         )
 
-      # --- TAB 2: MAJOR CAUSES ---
       with tab2:
-        st.subheader("Major Causes of ATM Declines (Response Code Breakdown)")
+        st.markdown("#### Major Causes of ATM Declines (Response Codes)")
         rc_col = combined_decline.columns[0]
         combined_decline[rc_col] = (
             pd.to_numeric(combined_decline[rc_col], errors="coerce")
@@ -242,12 +313,12 @@ elif report_selection == "1. Decline trasnactions summery":
 # ==========================================
 # 2. SUCCESS RATE RANKING & SUMMARY
 # ==========================================
-elif report_selection == "2. Success Rate Ranking & Summary":
-  st.title("🏆 ATM Success Rate Ranking & Target Evaluation")
+elif report_type == "2. Success Rate Ranking & Summary":
+  st.subheader("🏆 ATM Success Rate Ranking & Target Evaluation")
 
   target_pct = (
-      st.sidebar.slider(
-          "Target Threshold (%)",
+      st.slider(
+          "Target Success Rate Threshold (%)",
           min_value=90.0,
           max_value=100.0,
           value=98.5,
