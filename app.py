@@ -211,7 +211,6 @@ def process_strict_daily_matrix(uploaded_files):
 # 5. Success Rate Processing Function (Report 2)
 @st.cache_data
 def process_success_rate_matrix(uploaded_files):
-  """Safely extracts the exact Issuer Success Rate (%) row from daily reports."""
   daily_success_records = []
 
   for idx, file in enumerate(uploaded_files, start=1):
@@ -254,7 +253,7 @@ def process_success_rate_matrix(uploaded_files):
               num = float(val_str)
               if num <= 1.0 and num > 0:
                 num = num * 100
-              bank_success_rates[bank] = round(num, 1)
+              bank_success_rates[bank] = round(num, 2)
             except ValueError:
               bank_success_rates[bank] = 100.0
           else:
@@ -267,7 +266,7 @@ def process_success_rate_matrix(uploaded_files):
         v for k, v in bank_success_rates.items() if k in STANDARD_BANKS
     ]
     weighted_avg = (
-        round(sum(valid_rates) / len(valid_rates), 1) if valid_rates else 100.0
+        round(sum(valid_rates) / len(valid_rates), 2) if valid_rates else 100.0
     )
     bank_success_rates["Weighted Average"] = weighted_avg
 
@@ -283,7 +282,7 @@ def process_success_rate_matrix(uploaded_files):
   avg_row = {"Bank/Date": "Average"}
   for bank in STANDARD_BANKS + ["Weighted Average"]:
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
-    avg_row[bank] = round(col_vals.mean(), 1)
+    avg_row[bank] = round(col_vals.mean(), 2)
 
   success_df = pd.concat(
       [success_df, pd.DataFrame([avg_row])], ignore_index=True
@@ -291,7 +290,43 @@ def process_success_rate_matrix(uploaded_files):
   return success_df
 
 
-# 6. Multi-File Uploader Section
+# 6. Success Rate Ranking Processing Function (Report 3)
+@st.cache_data
+def process_success_rate_ranking(success_df):
+  """Computes ranking from Report 2's Average row."""
+  if success_df is None:
+    return None
+
+  # Extract the 'Average' row
+  avg_row = success_df[success_df["Bank/Date"].astype(str).str.upper() == "AVERAGE"]
+  if avg_row.empty:
+    return None
+
+  ranking_data = []
+  for bank in STANDARD_BANKS:
+    if bank in avg_row.columns:
+      val = float(avg_row[bank].values[0])
+      target_status = "Meets target" if val >= 98.5 else "Below target"
+      ranking_data.append(
+          {"Participant": bank, "Success rate": val, "Target status": target_status}
+      )
+
+  ranking_df = pd.DataFrame(ranking_data)
+  # Sort descending by success rate
+  ranking_df = ranking_df.sort_values(
+      by="Success rate", ascending=False
+  ).reset_index(drop=True)
+  # Assign Rank
+  ranking_df.insert(0, "Rank", range(1, len(ranking_df) + 1))
+  # Format success rate as percentage string for display
+  ranking_df["Success rate formatted"] = (
+      ranking_df["Success rate"].astype(str) + "%"
+  )
+
+  return ranking_df
+
+
+# 7. Multi-File Uploader Section
 st.markdown("### 📁 **Upload Daily Source Reports**")
 uploaded_files = st.file_uploader(
     "Upload all daily ATM decline report files for the month",
@@ -301,7 +336,7 @@ uploaded_files = st.file_uploader(
 
 st.markdown("---")
 
-# 7. Report Selection (Stacked Ordered List)
+# 8. Report Selection (Stacked Ordered List)
 st.markdown("### **Report Type**")
 
 report_options = [
@@ -322,7 +357,7 @@ selected_report = st.radio(
 
 st.markdown("---")
 
-# 8. Core Execution Logic
+# 9. Core Execution Logic
 if not uploaded_files:
   st.info(
       "👈 Please upload your **daily report files** above to aggregate and"
@@ -450,17 +485,69 @@ else:
       )
 
     elif selected_report == "3. ATM success rate ranking":
+      success_df = process_success_rate_matrix(uploaded_files)
+      ranking_df = process_success_rate_ranking(success_df)
+
       st.subheader("3. ATM Success Rate Ranking")
-      st.info(
-          "Report logic for Success Rate Ranking (vs 98.5% benchmark) will be"
-          " populated here next."
+      st.write(
+          "Participant ranking based on monthly average success rates evaluated"
+          " against the **98.5%** target threshold."
+      )
+
+      # Build custom HTML table for Ranking Report
+      html_table = (
+          "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
+          " auto;'><table style='width: 100%; border-collapse: collapse; font-family:"
+          " sans-serif; font-size: 13px; text-align: center;'>"
+      )
+      html_table += "<thead><tr style='background-color: #f2f2f2;'>"
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Rank</th>"
+      )
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Participant</th>"
+      )
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Success rate</th>"
+      )
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Target status</th>"
+      )
+      html_table += "</tr></thead><tbody>"
+
+      for idx, row in ranking_df.iterrows():
+        is_below = row["Target status"] == "Below target"
+        status_color = "color: red; font-weight: bold;" if is_below else ""
+        html_table += "<tr>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px; font-weight: bold;'>{row['Rank']}</td>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold;'>{row['Participant']}</td>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{row['Success rate formatted']}</td>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px; {status_color}'>{row['Target status']}</td>"
+        html_table += "</tr>"
+
+      html_table += "</tbody></table></div>"
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+      export_df = ranking_df[["Rank", "Participant", "Success rate formatted", "Target status"]].copy()
+      export_df.rename(columns={"Success rate formatted": "Success rate"}, inplace=True)
+      csv_export = export_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Success Rate Ranking Report (CSV)",
+          data=csv_export,
+          file_name="atm_success_rate_ranking.csv",
+          mime="text/csv",
       )
 
     elif selected_report == "4. ATM decline contribution by participant":
       st.subheader("4. ATM Decline Contribution by Participant")
       st.info(
           "Report logic for participant decline contribution shares will be"
-          " populated here."
+          " populated here next."
       )
 
     elif selected_report == "5. Major ATM declined transactions":
