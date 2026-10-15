@@ -1,28 +1,55 @@
 import streamlit as st
 
-# Set page config
+# 1. Page Configuration
 st.set_page_config(
     page_title="EthSwitch Performance Reporting Hub",
-    page_icon="💳",
+    page_icon="🏢",
     layout="wide",
 )
 
-# --- Header Section ---
-st.markdown(
-    "<h1 style='text-align: center;'>ETHSWITCH</h1>", unsafe_allow_html=True
-)
-st.markdown(
-    "<h3 style='text-align: center; color: orange;'>EthSwitch Performance Reporting Hub</h3>",
-    unsafe_allow_html=True,
-)
-st.markdown(
-    "<p style='text-align: center; color: gray;'>Automated Bi-weekly & Monthly Report Generator</p>",
-    unsafe_allow_html=True,
-)
-st.markdown("---")
+# 2. Custom Top Header with Branding Logos (EthSwitch & EthioPay)
+col1, col2, col3 = st.columns([1, 3, 1])
 
-# --- Report Type Selection (Replacing Report Category & Old Report Section) ---
-st.markdown("### Report Type")
+with col1:
+  st.markdown("## 🏢 **ETHSWITCH**")
+
+with col2:
+  st.markdown(
+      "<h1 style='text-align: center; color: #E65100; font-weight: bold;"
+      " margin-bottom: 0;'>EthSwitch Performance Reporting Hub</h1>",
+      unsafe_allow_html=True,
+  )
+  st.markdown(
+      "<p style='text-align: center; color: #666666; margin-top: 0;'>Automated"
+      " Bi-weekly & Monthly Report Generator</p>",
+      unsafe_allow_html=True,
+  )
+
+with col3:
+  st.markdown(
+      "<h2 style='text-align: right;'>🦜 <span"
+      " style='color:#C2185B;'>EthioPay</span></h2>",
+      unsafe_allow_html=True,
+  )
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# 3. Orange Top Highlight Banner
+st.markdown(
+    """
+    <div style="background-color: #FFF3E0; border-left: 6px solid #E65100; padding: 12px; border-radius: 4px; text-align: center;">
+        <h3 style="color: #E65100; margin: 0; font-size: 18px; font-weight: bold; letter-spacing: 1px;">
+            BI-WEEKLY & MONTHLY REPORT GENERATOR
+        </h3>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown("<br>", unsafe_allow_html=True)
+
+# 4. Report Type Selection Section
+st.markdown("### **Report Type**")
 
 report_options = [
     "Home / Overview",
@@ -33,35 +60,39 @@ report_options = [
     "5. Major ATM declined transactions",
 ]
 
-selected_report = st.radio("Select Report Type", report_options, horizontal=True)
+selected_report = st.radio(
+    "Select Report Type",
+    report_options,
+    horizontal=True,
+    label_visibility="collapsed",  # Hides duplicate internal label
+)
 
 st.markdown("---")
 
-# --- Content Routing Based on Selection ---
+# 5. Content Routing for Each Report
 if selected_report == "Home / Overview":
   st.subheader("Welcome to the Central Dashboard")
   st.write(
       "Please select a report type above to view detailed performance metrics"
       " and analytics."
   )
-  # Add your Home/Overview content here
 
 elif selected_report == "1. ATM decline summery":
-  st.subheader("ATM Decline Summary")
-  # TODO: Insert your ATM decline summary script/logic here
+  st.subheader("1. ATM Decline Summary")
+  # Paste Script 1 logic here
 
 elif selected_report == "2. ATM Transaction Success Rate Summary":
-  st.subheader("ATM Transaction Success Rate Summary")
-  # TODO: Insert your success rate summary script/logic here
+  st.subheader("2. ATM Transaction Success Rate Summary")
+  # Paste Script 2 logic here
 
 elif selected_report == "3. ATM success rate ranking":
-  st.subheader("ATM Success Rate Ranking")
-  # TODO: Insert your ranking script/logic here (e.g., benchmark vs 98.5% target)
+  st.subheader("3. ATM Success Rate Ranking")
+  # Paste Script 3 logic here
 
 elif selected_report == "4. ATM decline contribution by participant":
-  st.subheader("ATM Decline Contribution by Participant")
-  # TODO: Insert your participant contribution script/logic here
+  st.subheader("4. ATM Decline Contribution by Participant")
+  # Paste Script 4 logic here
 
 elif selected_report == "5. Major ATM declined transactions":
-  st.subheader("Major ATM Declined Transactions")
-  # TODO: Insert your major declines analysis script/logic here
+  st.subheader("5. Major ATM Declined Transactions")
+  # Paste Script 5 logic here
