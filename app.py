@@ -1,3 +1,4 @@
+import pandas as pd
 import streamlit as st
 
 # 1. Page Configuration
@@ -7,12 +8,10 @@ st.set_page_config(
     layout="wide",
 )
 
-# 2. Custom Top Header with Branding Logos
+# 2. Top Header & Branding
 col1, col2, col3 = st.columns([1, 3, 1])
-
 with col1:
   st.markdown("## 🏢 **ETHSWITCH**")
-
 with col2:
   st.markdown(
       "<h1 style='text-align: center; color: #E65100; font-weight: bold;"
@@ -24,7 +23,6 @@ with col2:
       " Bi-weekly & Monthly Report Generator</p>",
       unsafe_allow_html=True,
   )
-
 with col3:
   st.markdown(
       "<h2 style='text-align: right;'>🦜 <span"
@@ -34,7 +32,7 @@ with col3:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 3. Highlight Banner
+# 3. Banner
 st.markdown(
     """
     <div style="background-color: #FFF3E0; border-left: 6px solid #E65100; padding: 12px; border-radius: 4px; text-align: center;">
@@ -48,7 +46,29 @@ st.markdown(
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 4. Report Selection (Stacked Ordered List)
+
+# 4. Data Loading Function (Cached for fast switching)
+@st.cache_data
+def load_data(uploaded_file):
+  """Reads Excel/CSV data once for all 5 reports."""
+  if uploaded_file.name.endswith(".csv"):
+    df = pd.read_csv(uploaded_file)
+  else:
+    df = pd.read_excel(uploaded_file)
+  # Place any global data cleaning here (e.g. standardizing column names)
+  return df
+
+
+# 5. Data Upload Section
+st.markdown("### 📁 **Upload Source Data**")
+uploaded_file = st.file_uploader(
+    "Upload your ATM Transaction Excel or CSV file (used across all 5 reports)",
+    type=["xlsx", "xls", "csv"],
+)
+
+st.markdown("---")
+
+# 6. Report Selection Options
 st.markdown("### **Report Type**")
 
 report_options = [
@@ -63,36 +83,55 @@ report_options = [
 selected_report = st.radio(
     "Select Report Type",
     report_options,
-    horizontal=False,  # Vertically stacked list
-    label_visibility="collapsed",  # Clean layout without repetitive label
+    horizontal=False,
+    label_visibility="collapsed",
 )
 
 st.markdown("---")
 
-# 5. Content Routing & Script Placeholders
-if selected_report == "Home / Overview":
-  st.subheader("Welcome to the Central Dashboard")
-  st.write(
-      "Please select a report type from the list above to view detailed"
-      " performance metrics and analytics."
+# 7. Report Generation Logic
+if uploaded_file is None:
+  st.info(
+      "👈 Please upload your transaction data file above to begin generating"
+      " reports."
   )
 
-elif selected_report == "1. ATM decline summery":
-  st.subheader("1. ATM Decline Summary")
-  # TODO: Paste your script for Report 1 here
+else:
+  # Load the data once
+  df = load_data(uploaded_file)
+  st.success(
+      f"Data loaded successfully! Total records: **{len(df):,} rows**"
+  )
 
-elif selected_report == "2. ATM Transaction Success Rate Summary":
-  st.subheader("2. ATM Transaction Success Rate Summary")
-  # TODO: Paste your script for Report 2 here
+  # --- REPORT 0: HOME / OVERVIEW ---
+  if selected_report == "Home / Overview":
+    st.subheader("📊 Dataset Overview")
+    st.write("Data Preview:")
+    st.dataframe(df.head(10), use_container_width=True)
 
-elif selected_report == "3. ATM success rate ranking":
-  st.subheader("3. ATM Success Rate Ranking")
-  # TODO: Paste your script for Report 3 here
+  # --- REPORT 1: ATM DECLINE SUMMARY ---
+  elif selected_report == "1. ATM decline summery":
+    st.subheader("1. ATM Decline Summary")
+    # Example logic: Filter by declined transactions
+    # df_declined = df[df['Status'] == 'Decline']
+    # st.dataframe(df_declined)
 
-elif selected_report == "4. ATM decline contribution by participant":
-  st.subheader("4. ATM Decline Contribution by Participant")
-  # TODO: Paste your script for Report 4 here
+  # --- REPORT 2: SUCCESS RATE SUMMARY ---
+  elif selected_report == "2. ATM Transaction Success Rate Summary":
+    st.subheader("2. ATM Transaction Success Rate Summary")
+    # Example logic: Total Success vs Total Declined
 
-elif selected_report == "5. Major ATM declined transactions":
-  st.subheader("5. Major ATM Declined Transactions")
-  # TODO: Paste your script for Report 5 here
+  # --- REPORT 3: SUCCESS RATE RANKING ---
+  elif selected_report == "3. ATM success rate ranking":
+    st.subheader("3. ATM Success Rate Ranking")
+    # Example logic: Group by Bank/Participant, compute success %, compare against 98.5% target threshold
+
+  # --- REPORT 4: DECLINE CONTRIBUTION BY PARTICIPANT ---
+  elif selected_report == "4. ATM decline contribution by participant":
+    st.subheader("4. ATM Decline Contribution by Participant")
+    # Example logic: Group by Participant bank to see contribution % to overall declines
+
+  # --- REPORT 5: MAJOR DECLINED TRANSACTIONS ---
+  elif selected_report == "5. Major ATM declined transactions":
+    st.subheader("5. Major ATM Declined Transactions")
+    # Example logic: Group by Response Code / Reason to find top decline causes
