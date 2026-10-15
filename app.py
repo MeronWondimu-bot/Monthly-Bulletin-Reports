@@ -48,7 +48,7 @@ st.markdown(
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 4. Report Selection Dropdown (Ordered Option 2)
+# 4. Report Selection (Stacked Ordered List)
 st.markdown("### **Report Type**")
 
 report_options = [
@@ -60,10 +60,11 @@ report_options = [
     "5. Major ATM declined transactions",
 ]
 
-selected_report = st.selectbox(
-    "Choose a report type to generate:",
+selected_report = st.radio(
+    "Select Report Type",
     report_options,
-    index=0,
+    horizontal=False,  # Vertically stacked list
+    label_visibility="collapsed",  # Clean layout without repetitive label
 )
 
 st.markdown("---")
@@ -72,7 +73,7 @@ st.markdown("---")
 if selected_report == "Home / Overview":
   st.subheader("Welcome to the Central Dashboard")
   st.write(
-      "Please select a report type from the dropdown above to view detailed"
+      "Please select a report type from the list above to view detailed"
       " performance metrics and analytics."
   )
 
