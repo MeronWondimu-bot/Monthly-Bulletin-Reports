@@ -50,17 +50,16 @@ st.markdown(
 st.markdown("<br>", unsafe_allow_html=True)
 
 
-# 4. Accurate Multi-File Processing Function
+# 4. Processing Function for Complete Matrix & TOTAL Row
 @st.cache_data
-def process_daily_decline_files(uploaded_files):
-  """Reads multiple daily report files, detects header dynamically,
+def process_full_decline_matrix(uploaded_files):
+  """Aggregates daily reports, ensures all response codes and banks are included,
 
-  and aggregates decline counts by Response Code and Bank.
+  and appends the correct TOTAL summary row at the bottom.
   """
   all_dfs = []
 
   for file in uploaded_files:
-    # Read raw without header to find 'RC/BANK NAME'
     df_raw = pd.read_excel(file, header=None)
     header_row_idx = None
     for idx, row in df_raw.iterrows():
@@ -72,29 +71,59 @@ def process_daily_decline_files(uploaded_files):
 
     if header_row_idx is not None:
       df_day = pd.read_excel(file, header=header_row_idx)
-      # Clean column names
       df_day.columns = [str(c).strip() for c in df_day.columns]
-      # Filter out description rows at the bottom if present (keep only numeric response codes)
-      if "RC/BANK NAME" in df_day.columns:
-        df_day = df_day.dropna(subset=["RC/BANK NAME"])
-        all_dfs.append(df_day)
+      rc_col = df_day.columns[0]
+      df_day = df_day.dropna(subset=[rc_col])
+
+      # Keep valid numeric response code rows plus any explicit 'TOTAL' row
+      df_filtered = df_day[
+          df_day[rc_col].astype(str).str.replace(".", "", regex=False).str.isdigit()
+          | (df_day[rc_col].astype(str).str.upper() == "TOTAL")
+      ]
+      all_dfs.append(df_filtered)
 
   if not all_dfs:
     return None
 
-  # Combine all daily dataframes
   combined = pd.concat(all_dfs, ignore_index=True)
-
-  # Group by Response Code ('RC/BANK NAME') and sum numeric values across all days
   rc_col = combined.columns[0]
-  aggregated_df = combined.groupby(rc_col, as_index=False).sum(
-      numeric_only=True
-  )
+
+  # Separate the TOTAL row if it exists, sum the rest by Response Code, then re-add TOTAL
+  if "TOTAL" in combined[rc_col].astype(str).str.upper().values:
+    # Drop existing total rows to re-compute accurately across all days
+    combined_clean = combined[
+        ~combined[rc_col].astype(str).str.upper().str.contains("TOTAL")
+    ]
+    aggregated_df = combined_clean.groupby(rc_col, as_index=False).sum(
+        numeric_only=True
+    )
+
+    # Compute new TOTAL row (sum of all columns)
+    total_row = aggregated_df.sum(numeric_only=True).to_frame().T
+    total_row[rc_col] = "TOTAL"
+    aggregated_df = pd.concat(
+        [aggregated_df, total_row], ignore_index=True
+    )
+  else:
+    aggregated_df = combined.groupby(rc_col, as_index=False).sum(
+        numeric_only=True
+    )
 
   return aggregated_df
 
 
-# 5. Multi-File Uploader Section
+# 5. Styling Function: Highlight values > 100 in Red
+def color_red_if_above_100(val):
+  try:
+    num = float(val)
+    if num > 100:
+      return "color: red; font-weight: bold;"
+  except ValueError:
+    pass
+  return ""
+
+
+# 6. Multi-File Uploader Section
 st.markdown("### 📁 **Upload Daily Source Reports**")
 uploaded_files = st.file_uploader(
     "Upload all daily ATM decline report files for the month",
@@ -104,7 +133,7 @@ uploaded_files = st.file_uploader(
 
 st.markdown("---")
 
-# 6. Report Selection (Stacked Ordered List)
+# 7. Report Selection (Stacked Ordered List)
 st.markdown("### **Report Type**")
 
 report_options = [
@@ -125,7 +154,7 @@ selected_report = st.radio(
 
 st.markdown("---")
 
-# 7. Core Execution Logic
+# 8. Core Execution Logic
 if not uploaded_files:
   st.info(
       "👈 Please upload your **daily report files** above to aggregate and"
@@ -133,7 +162,7 @@ if not uploaded_files:
   )
 else:
   try:
-    master_df = process_daily_decline_files(uploaded_files)
+    master_df = process_full_decline_matrix(uploaded_files)
 
     # --- HOME / OVERVIEW ---
     if selected_report == "Home / Overview":
@@ -147,28 +176,26 @@ else:
 
     # --- 1. ATM DECLINE SUMMARY ---
     elif selected_report == "1. ATM decline summery":
-      st.subheader("1. ATM Decline Summary (Multi-Day Aggregated)")
+      st.subheader("1. ATM Decline Summary (Complete Bank & Response Code Matrix)")
       st.write(
-          "Totalized decline transactions for each bank and response code"
-          f" combined from {len(uploaded_files)} daily reports."
+          "Complete decline breakdown for all banks and response codes."
+          " Transactions exceeding **100** are highlighted in red."
       )
 
-      st.markdown("### 📊 Decline Summary Matrix")
-      st.dataframe(master_df, use_container_width=True)
+      # Apply conditional styling (Red text for values > 100)
+      styled_df = master_df.style.applymap(
+          color_red_if_above_100,
+          subset=master_df.columns[1:],  # Apply to numeric bank columns
+      )
 
-      if "Total" in master_df.columns:
-        total_declines = master_df["Total"].sum()
-        st.metric(
-            label="Total Declined Transactions (Selected Period)",
-            value=f"{total_declines:,.0f}",
-        )
+      st.dataframe(styled_df, use_container_width=True)
 
       # Download Button
       csv_export = master_df.to_csv(index=False).encode("utf-8")
       st.download_button(
-          label="Download Aggregated Decline Summary (CSV)",
+          label="Download Complete Decline Summary Report (CSV)",
           data=csv_export,
-          file_name="aggregated_atm_decline_summary.csv",
+          file_name="complete_atm_decline_summary.csv",
           mime="text/csv",
       )
 
