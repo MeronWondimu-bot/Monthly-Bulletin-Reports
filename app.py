@@ -78,6 +78,44 @@ STANDARD_BANKS = [
     "Tseday",
 ]
 
+# Comprehensive bank alias mapping for full names & short codes
+BANK_ALIASES = {
+    "CBE": ["CBE", "COMMERCIAL BANK OF ETHIOPIA", "COMMERCIAL", "COMM"],
+    "BOA": ["BOA", "BANK OF ABYSSINIA", "ABYSSINIA"],
+    "ABAY": ["ABAY", "ABAY BANK"],
+    "DASHEN": ["DASHEN", "DASHEN BANK"],
+    "WEGAGEN": ["WEGAGEN", "WEGAGEN BANK", "WGB"],
+    "ZEMEN": ["ZEMEN", "ZEMEN BANK"],
+    "BUNNA": ["BUNNA", "BUNNA BANK"],
+    "ENAT": ["ENAT", "ENAT BANK"],
+    "DGB": ["DGB", "DEVELOPMENT BANK OF ETHIOPIA", "DBE"],
+    "LION": ["LION", "LION INTERNATIONAL BANK", "LIB"],
+    "OIB": ["OIB", "OROMIA INTERNATIONAL BANK", "OROMIA BANK"],
+    "BRIB": ["BRIB", "BERHAN", "BERHAN BANK"],
+    "UB": ["UB", "UNITED BANK", "COOP UB", "UNITED"],
+    "AIB": ["AIB", "AWASH", "AWASH BANK", "AWASH INTERNATIONAL BANK"],
+    "CBO": ["CBO", "COOPERATIVE BANK OF OROMIA"],
+    "NIB": ["NIB", "NIB INTERNATIONAL BANK", "NIB BANK"],
+    "ADIB": ["ADIB", "ADDIS INTERNATIONAL BANK", "ADDIS BANK"],
+    "ZAMZAM": ["ZAMZAM", "ZAMZAM BANK"],
+    "HIJRA": ["HIJRA", "HIJRA BANK"],
+    "AHADU": ["AHADU", "AHADU BANK"],
+    "SINQEE": ["SINQEE", "SINQEE BANK"],
+    "AMHARA": ["AMHARA", "AMHARA BANK"],
+    "Tseday": ["TSEDAY", "TSEDAY BANK", "TSEDAY BANK S.C."],
+}
+
+
+def standardize_bank_name(col_name):
+  cleaned = str(col_name).strip().upper()
+  for std_code, aliases in BANK_ALIASES.items():
+    if cleaned == std_code or cleaned in aliases:
+      return std_code
+    for alias in aliases:
+      if alias in cleaned:
+        return std_code
+  return cleaned
+
 
 # Helper function to extract date label like '1-Sep' from filename
 def extract_date_label(filename, index):
@@ -98,7 +136,7 @@ def extract_date_label(filename, index):
   return f"{index}-Sep"
 
 
-# 4. Strict Line-by-Line, RC-to-RC, Bank-to-Bank Aggregation Function (Report 1)
+# 4. Strict Line-by-Line Aggregation Function (Report 1)
 @st.cache_data
 def process_strict_daily_matrix(uploaded_files):
   daily_matrices = []
@@ -116,7 +154,10 @@ def process_strict_daily_matrix(uploaded_files):
 
     if header_row_idx is not None:
       df_day = pd.read_excel(file, header=header_row_idx)
-      df_day.columns = [str(c).strip() for c in df_day.columns]
+      df_day.columns = [
+          standardize_bank_name(c) if i > 0 else str(c).strip()
+          for i, c in enumerate(df_day.columns)
+      ]
       rc_col = df_day.columns[0]
 
       df_day = df_day.dropna(subset=[rc_col])
@@ -170,7 +211,7 @@ def process_strict_daily_matrix(uploaded_files):
 # 5. Success Rate Processing Function (Report 2)
 @st.cache_data
 def process_success_rate_matrix(uploaded_files):
-  """Processes each daily file to compute issuer success rates per bank and day accurately."""
+  """Processes each daily file with universal bank name mapping for success rates."""
   daily_success_records = []
 
   for idx, file in enumerate(uploaded_files, start=1):
@@ -188,7 +229,10 @@ def process_success_rate_matrix(uploaded_files):
 
     if header_row_idx is not None:
       df_day = pd.read_excel(file, header=header_row_idx)
-      df_day.columns = [str(c).strip() for c in df_day.columns]
+      df_day.columns = [
+          standardize_bank_name(c) if i > 0 else str(c).strip()
+          for i, c in enumerate(df_day.columns)
+      ]
       rc_col = df_day.columns[0]
 
       df_day = df_day.dropna(subset=[rc_col])
@@ -212,7 +256,6 @@ def process_success_rate_matrix(uploaded_files):
       bank_success_rates = {}
       for bank in STANDARD_BANKS:
         total_declines = df_numeric[bank].sum()
-        # Compute realistic daily success rate based on decline volume
         rate = max(0.0, min(100.0, 99.5 - (total_declines * 0.001)))
         bank_success_rates[bank] = round(rate, 1)
 
@@ -231,7 +274,6 @@ def process_success_rate_matrix(uploaded_files):
   cols = ["Bank/Date"] + STANDARD_BANKS + ["Weighted Average"]
   success_df = success_df[cols]
 
-  # Calculate Average row across all days
   avg_row = {"Bank/Date": "Average"}
   for bank in STANDARD_BANKS + ["Weighted Average"]:
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
@@ -282,7 +324,6 @@ if not uploaded_files:
   )
 else:
   try:
-    # --- HOME / OVERVIEW ---
     if selected_report == "Home / Overview":
       st.subheader("Welcome to the Central Dashboard")
       st.success(
@@ -294,15 +335,9 @@ else:
           " analytics."
       )
 
-    # --- 1. ATM DECLINE SUMMARY ---
     elif selected_report == "1. ATM decline summery":
       master_df = process_strict_daily_matrix(uploaded_files)
       st.subheader("1. ATM Decline Summary (Monthly Aggregated Matrix)")
-      st.write(
-          "Complete line-by-line RC-to-RC and bank-to-bank aggregation across"
-          f" {len(uploaded_files)} daily reports. Transactions exceeding"
-          " **100** are highlighted in red."
-      )
 
       html_table = (
           "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
@@ -352,7 +387,6 @@ else:
           mime="text/csv",
       )
 
-    # --- 2. SUCCESS RATE SUMMARY ---
     elif selected_report == "2. ATM Transaction Success Rate Summary":
       success_df = process_success_rate_matrix(uploaded_files)
       st.subheader("2. ATM Transaction Success Rate Summary")
@@ -409,7 +443,6 @@ else:
           mime="text/csv",
       )
 
-    # --- 3. SUCCESS RATE RANKING ---
     elif selected_report == "3. ATM success rate ranking":
       st.subheader("3. ATM Success Rate Ranking")
       st.info(
@@ -417,7 +450,6 @@ else:
           " populated here next."
       )
 
-    # --- 4. DECLINE CONTRIBUTION BY PARTICIPANT ---
     elif selected_report == "4. ATM decline contribution by participant":
       st.subheader("4. ATM Decline Contribution by Participant")
       st.info(
@@ -425,7 +457,6 @@ else:
           " populated here."
       )
 
-    # --- 5. MAJOR DECLINED TRANSACTIONS ---
     elif selected_report == "5. Major ATM declined transactions":
       st.subheader("5. Major ATM Declined Transactions")
       st.info(
