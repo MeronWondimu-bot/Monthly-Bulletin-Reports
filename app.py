@@ -50,19 +50,39 @@ st.markdown(
 st.markdown("<br>", unsafe_allow_html=True)
 
 
-# 4. Global Excel File Caching & Loading Function
+# 4. Multi-File Processing Function
 @st.cache_data
-def load_excel_file(uploaded_file):
-  xls = pd.ExcelFile(uploaded_file)
-  return xls
+def process_multiple_daily_files(uploaded_files):
+  """Reads multiple daily report files and aggregates them into a single summary."""
+  all_daily_dfs = []
+
+  for file in uploaded_files:
+    # Read each daily file (assuming format matches your structure where header is at row index 2)
+    df_day = pd.read_excel(file, header=2)
+    all_daily_dfs.append(df_day)
+
+  if not all_daily_dfs:
+    return None
+
+  # Combine all uploaded daily reports
+  combined_df = pd.concat(all_daily_dfs, ignore_index=True)
+
+  # Group by the first column (Response Code) and sum up numeric bank values across all days
+  rc_col = combined_df.columns[0]
+  aggregated_df = combined_df.groupby(rc_col, as_index=False).sum(
+      numeric_only=True
+  )
+
+  return aggregated_df
 
 
-# 5. File Uploader Section
-st.markdown("### 📁 **Upload Source Data**")
-uploaded_file = st.file_uploader(
-    "Upload your ATM Transaction Excel Report (e.g., ATM Declined Transaction"
-    " Report)",
+# 5. Multi-File Uploader Section
+st.markdown("### 📁 **Upload Daily Source Reports**")
+uploaded_files = st.file_uploader(
+    "Upload multiple daily ATM report files (Select all daily Excel files for"
+    " the month)",
     type=["xlsx", "xls"],
+    accept_multiple_files=True,  # Allows uploading many files at once!
 )
 
 st.markdown("---")
@@ -82,88 +102,63 @@ report_options = [
 selected_report = st.radio(
     "Select Report Type",
     report_options,
-    horizontal=False,  # Vertically stacked list
+    horizontal=False,
     label_visibility="collapsed",
 )
 
 st.markdown("---")
 
 # 7. Core Execution Logic
-if uploaded_file is None:
+if not uploaded_files:
   st.info(
-      "👈 Please upload your transaction Excel file above to generate and"
-      " view reports."
+      "👈 Please upload your **daily report files** above to aggregate and"
+      " generate reports."
   )
 else:
   try:
-    xls = load_excel_file(uploaded_file)
-    sheet_names = xls.sheet_names
+    # Process and aggregate all daily files
+    master_decline_df = process_multiple_daily_files(uploaded_files)
 
     # --- HOME / OVERVIEW ---
     if selected_report == "Home / Overview":
       st.subheader("Welcome to the Central Dashboard")
-      st.write(
-          "Successfully loaded workbook containing"
-          f" **{len(sheet_names)} sheets**."
+      st.success(
+          f"Successfully uploaded and processed **{len(uploaded_files)} daily"
+          " report files**."
       )
-      st.write("Available sheets in workbook:")
-      st.write(", ".join(sheet_names[:10]) + ("..." if len(sheet_names) > 10 else ""))
 
-      # Preview monthly summary sheet if available
-      summary_sheet_name = (
-          "Sheet16" if "Sheet16" in sheet_names else sheet_names[0]
-      )
-      df_preview = pd.read_excel(uploaded_file, sheet_name=summary_sheet_name)
-      st.markdown(f"### Preview: {summary_sheet_name}")
-      st.dataframe(df_preview.head(10), use_container_width=True)
+      st.markdown("### 📊 Aggregated Monthly Preview")
+      st.dataframe(master_decline_df.head(10), use_container_width=True)
 
     # --- 1. ATM DECLINE SUMMARY ---
     elif selected_report == "1. ATM decline summery":
-      st.subheader("1. ATM Decline Summary")
+      st.subheader("1. ATM Decline Summary (Multi-Day Aggregation)")
       st.write(
-          "Aggregated transaction decline response summary across participating"
-          " banks."
+          "Aggregated transaction decline response summary combining all"
+          f" uploaded daily reports ({len(uploaded_files)} files)."
       )
-
-      sheet_choice = st.radio(
-          "Select Data Source for Decline Summary:",
-          ["Monthly Summary Sheet (Sheet16)", "Aggregate All Daily Sheets"],
-          horizontal=True,
-      )
-
-      if sheet_choice == "Monthly Summary Sheet (Sheet16)":
-        target_sheet = "Sheet16" if "Sheet16" in sheet_names else sheet_names[0]
-        df_decline = pd.read_excel(uploaded_file, sheet_name=target_sheet, header=2)
-      else:
-        daily_sheets = [s for s in sheet_names if s != "Sheet16"]
-        all_dfs = []
-        for s in daily_sheets:
-          temp_df = pd.read_excel(uploaded_file, sheet_name=s, header=2)
-          all_dfs.append(temp_df)
-        combined = pd.concat(all_dfs, ignore_index=True)
-        df_decline = combined.groupby(combined.columns[0], as_index=False).sum(
-            numeric_only=True
-        )
 
       # Clean column headers
-      df_decline.columns = [str(c).strip() for c in df_decline.columns]
+      master_decline_df.columns = [
+          str(c).strip() for c in master_decline_df.columns
+      ]
 
-      st.markdown("### 📊 Decline Summary Matrix")
-      st.dataframe(df_decline, use_container_width=True)
+      st.markdown("### 📊 Combined Decline Summary Matrix")
+      st.dataframe(master_decline_df, use_container_width=True)
 
-      if "Total" in df_decline.columns:
-        total_declines = df_decline["Total"].sum()
+      if "Total" in master_decline_df.columns:
+        total_declines = master_decline_df["Total"].sum()
         st.metric(
-            label="Total Declined Transactions (Period)",
+            label="Total Declined Transactions (Selected Period)",
             value=f"{total_declines:,.0f}",
         )
 
       # Download Button
-      csv_export = df_decline.to_csv(index=False).encode("utf-8")
+      csv_export = master_decline_df.to_csv(index=False).encode("utf-8")
       st.download_button(
-          label="Download Decline Summary Report (CSV)",
+          label="Download Combined Decline Summary Report (CSV)",
           data=csv_export,
-          file_name="atm_decline_summary_report.csv",
+          file_name="combined_atm_decline_summary.csv",
           mime="text/csv",
       )
 
@@ -171,7 +166,8 @@ else:
     elif selected_report == "2. ATM Transaction Success Rate Summary":
       st.subheader("2. ATM Transaction Success Rate Summary")
       st.info(
-          "Report logic for Success Rate Summary will be implemented here next."
+          "Report logic for Success Rate Summary across daily uploads will be"
+          " implemented here next."
       )
 
     # --- 3. SUCCESS RATE RANKING ---
@@ -200,6 +196,6 @@ else:
 
   except Exception as e:
     st.error(
-        "An error occurred while processing the Excel file. Please check file"
-        f" format. Details: {e}"
+        "An error occurred while processing the daily files. Please ensure"
+        f" they have matching structures. Details: {e}"
     )
