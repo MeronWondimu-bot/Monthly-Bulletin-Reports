@@ -55,13 +55,12 @@ st.markdown("<br>", unsafe_allow_html=True)
 def process_strict_daily_matrix(uploaded_files):
   """Reads each daily report, aligns every line (Response Code) and column (Bank)
 
-  precisely, and aggregates them into a unified master matrix.
+  precisely, removes duplicates from description tables, and aggregates them.
   """
   daily_matrices = []
   all_banks_set = set()
   all_rcs_set = set()
 
-  # First pass: parse each file into a standardized DataFrame indexed by RC and columns as Banks
   for file in uploaded_files:
     df_raw = pd.read_excel(file, header=None)
     header_row_idx = None
@@ -83,8 +82,11 @@ def process_strict_daily_matrix(uploaded_files):
           df_day[rc_col].astype(str).str.replace(".", "", regex=False).str.isdigit()
       ].copy()
 
-      # Standardize Response Code as string for alignment
+      # Standardize Response Code as string
       df_day[rc_col] = df_day[rc_col].astype(str).str.strip()
+
+      # Drop duplicate RCs if the description table repeats them at the bottom
+      df_day = df_day.drop_duplicates(subset=[rc_col], keep="first")
 
       # Extract bank columns (excluding TOTAL and Unnamed)
       bank_cols = [
@@ -116,7 +118,6 @@ def process_strict_daily_matrix(uploaded_files):
   master_grid = pd.DataFrame(0.0, index=sorted_rcs, columns=sorted_banks)
 
   for mat in daily_matrices:
-    # Reindex to master grid, filling missing RCs or Banks with 0
     aligned_mat = mat.reindex(
         index=sorted_rcs, columns=sorted_banks, fill_value=0
     )
@@ -206,61 +207,4 @@ else:
     # --- 1. ATM DECLINE SUMMARY ---
     elif selected_report == "1. ATM decline summery":
       st.subheader(
-          "1. ATM Decline Summary (Strict Line-by-Line RC & Bank Matrix)"
-      )
-      st.write(
-          "Complete line-by-line RC-to-RC and bank-to-bank aggregation across"
-          f" {len(uploaded_files)} daily reports. Transactions exceeding"
-          " **100** are highlighted in red."
-      )
-
-      # Apply conditional styling (Red text for values > 100)
-      styled_df = master_df.style.applymap(
-          color_red_if_above_100,
-          subset=master_df.columns[1:],  # Apply across all bank and total columns
-      )
-
-      st.dataframe(styled_df, use_container_width=True)
-
-      # Download Button
-      csv_export = master_df.to_csv(index=False).encode("utf-8")
-      st.download_button(
-          label="Download Complete Decline Summary Report (CSV)",
-          data=csv_export,
-          file_name="strict_aligned_atm_decline_summary.csv",
-          mime="text/csv",
-      )
-
-    # --- 2. SUCCESS RATE SUMMARY ---
-    elif selected_report == "2. ATM Transaction Success Rate Summary":
-      st.subheader("2. ATM Transaction Success Rate Summary")
-      st.info(
-          "Report logic for Success Rate Summary will be populated here next."
-      )
-
-    # --- 3. SUCCESS RATE RANKING ---
-    elif selected_report == "3. ATM success rate ranking":
-      st.subheader("3. ATM Success Rate Ranking")
-      st.info(
-          "Report logic for Success Rate Ranking (vs 98.5% benchmark) will be"
-          " populated here."
-      )
-
-    # --- 4. DECLINE CONTRIBUTION BY PARTICIPANT ---
-    elif selected_report == "4. ATM decline contribution by participant":
-      st.subheader("4. ATM Decline Contribution by Participant")
-      st.info(
-          "Report logic for participant decline contribution shares will be"
-          " populated here."
-      )
-
-    # --- 5. MAJOR DECLINED TRANSACTIONS ---
-    elif selected_report == "5. Major ATM declined transactions":
-      st.subheader("5. Major ATM Declined Transactions")
-      st.info(
-          "Report logic for major response codes and error descriptions will"
-          " be populated here."
-      )
-
-  except Exception as e:
-    st.error(f"An error occurred while processing daily files: {e}")
+          "1. ATM Decline Summary (Strict Line-by-Line
