@@ -148,6 +148,9 @@ def process_strict_daily_matrix(uploaded_files):
   final_df = master_grid.reset_index()
   final_df.rename(columns={final_df.columns[0]: "RC/BANK NAME"}, inplace=True)
 
+  # Convert bank columns to integer
+  final_df[STANDARD_BANKS] = final_df[STANDARD_BANKS].astype(int)
+
   # Calculate Total column for each response code row
   final_df["Total"] = final_df[STANDARD_BANKS].sum(axis=1)
 
@@ -155,6 +158,10 @@ def process_strict_daily_matrix(uploaded_files):
   total_row = final_df[STANDARD_BANKS].sum(numeric_only=True).to_frame().T
   total_row["RC/BANK NAME"] = "TOTAL"
   total_row["Total"] = total_row[STANDARD_BANKS].sum(axis=1)
+
+  # Ensure TOTAL row is integer
+  total_row[STANDARD_BANKS] = total_row[STANDARD_BANKS].astype(int)
+  total_row["Total"] = total_row["Total"].astype(int)
 
   # Append TOTAL row
   final_df = pd.concat([final_df, total_row], ignore_index=True)
@@ -235,53 +242,7 @@ else:
           " **100** are highlighted in red."
       )
 
-      # Apply conditional styling using .map() instead of .applymap()
-      styled_df = master_df.style.map(
-          color_red_if_above_100,
-          subset=master_df.columns[1:],  # Apply across all bank and total columns
-      )
-
-      st.dataframe(styled_df, use_container_width=True)
-
-      # Download Button
-      csv_export = master_df.to_csv(index=False).encode("utf-8")
-      st.download_button(
-          label="Download Complete Decline Summary Report (CSV)",
-          data=csv_export,
-          file_name="strict_aligned_atm_decline_summary.csv",
-          mime="text/csv",
-      )
-
-    # --- 2. SUCCESS RATE SUMMARY ---
-    elif selected_report == "2. ATM Transaction Success Rate Summary":
-      st.subheader("2. ATM Transaction Success Rate Summary")
-      st.info(
-          "Report logic for Success Rate Summary will be populated here next."
-      )
-
-    # --- 3. SUCCESS RATE RANKING ---
-    elif selected_report == "3. ATM success rate ranking":
-      st.subheader("3. ATM Success Rate Ranking")
-      st.info(
-          "Report logic for Success Rate Ranking (vs 98.5% benchmark) will be"
-          " populated here."
-      )
-
-    # --- 4. DECLINE CONTRIBUTION BY PARTICIPANT ---
-    elif selected_report == "4. ATM decline contribution by participant":
-      st.subheader("4. ATM Decline Contribution by Participant")
-      st.info(
-          "Report logic for participant decline contribution shares will be"
-          " populated here."
-      )
-
-    # --- 5. MAJOR DECLINED TRANSACTIONS ---
-    elif selected_report == "5. Major ATM declined transactions":
-      st.subheader("5. Major ATM Declined Transactions")
-      st.info(
-          "Report logic for major response codes and error descriptions will"
-          " be populated here."
-      )
-
-  except Exception as e:
-    st.error(f"An error occurred while processing daily files: {e}")
+      # Apply conditional styling and format numbers as integers without decimals
+      styled_df = (
+          master_df.style.map(
+              color_red_
