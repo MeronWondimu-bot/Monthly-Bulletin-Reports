@@ -328,7 +328,6 @@ def process_decline_contribution(master_df):
   if master_df is None:
     return None
 
-  # Extract the TOTAL row
   total_row_df = master_df[
       master_df["RC/BANK NAME"].astype(str).str.upper() == "TOTAL"
   ]
@@ -353,13 +352,301 @@ def process_decline_contribution(master_df):
       )
 
   contrib_df = pd.DataFrame(contribution_data)
-  # Sort descending by declined transactions
   contrib_df = contrib_df.sort_values(
       by="Declined transactions", ascending=False
   ).reset_index(drop=True)
-  # Format numbers and share percentages
+
   contrib_df["Declined transactions formatted"] = contrib_df[
       "Declined transactions"
   ].map("{:,}".format)
   contrib_df["Share formatted"] = contrib_df["Share of ATM declines"].map(
-      "{:.2f}%".format
+      lambda x: f"{x:.2f}%"
+  )
+
+  return contrib_df
+
+
+# 8. Multi-File Uploader Section
+st.markdown("### 📁 **Upload Daily Source Reports**")
+uploaded_files = st.file_uploader(
+    "Upload all daily ATM decline report files for the month",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True,
+)
+
+st.markdown("---")
+
+# 9. Report Selection (Stacked Ordered List)
+st.markdown("### **Report Type**")
+
+report_options = [
+    "Home / Overview",
+    "1. ATM decline summery",
+    "2. ATM Transaction Success Rate Summary",
+    "3. ATM success rate ranking",
+    "4. ATM decline contribution by participant",
+    "5. Major ATM declined transactions",
+]
+
+selected_report = st.radio(
+    "Select Report Type",
+    report_options,
+    horizontal=False,
+    label_visibility="collapsed",
+)
+
+st.markdown("---")
+
+# 10. Core Execution Logic
+if not uploaded_files:
+  st.info(
+      "👈 Please upload your **daily report files** above to aggregate and"
+      " generate reports."
+  )
+else:
+  try:
+    if selected_report == "Home / Overview":
+      st.subheader("Welcome to the Central Dashboard")
+      st.success(
+          f"Successfully processed and aligned **{len(uploaded_files)} daily"
+          " report files** line-by-line."
+      )
+      st.write(
+          "Select a report from the menu above to view detailed monthly"
+          " analytics."
+      )
+
+    elif selected_report == "1. ATM decline summery":
+      master_df = process_strict_daily_matrix(uploaded_files)
+      st.subheader("1. ATM Decline Summary (Monthly Aggregated Matrix)")
+
+      html_table = (
+          "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
+          " auto;'><table style='width: 100%; border-collapse: collapse; font-family:"
+          " sans-serif; font-size: 13px; text-align: center;'>"
+      )
+      html_table += "<thead><tr style='background-color: #f2f2f2;'>"
+      for col in master_df.columns:
+        html_table += f"<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>{col}</th>"
+      html_table += "</tr></thead><tbody>"
+
+      for idx, row in master_df.iterrows():
+        is_total_row = str(row["RC/BANK NAME"]).upper() == "TOTAL"
+        row_bg = (
+            "background-color: #f9f9f9; font-weight: bold;"
+            if is_total_row
+            else ""
+        )
+        html_table += f"<tr style='{row_bg}'>"
+
+        for col_idx, col in enumerate(master_df.columns):
+          val = row[col]
+          if col_idx == 0:
+            html_table += f"<td style='border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: left;'>{val}</td>"
+          else:
+            try:
+              num_val = float(val)
+              formatted_val = f"{int(num_val):,}"
+              if num_val > 100:
+                html_table += f"<td style='border: 1px solid #ddd; padding: 6px; color: red; font-weight: bold;'>{formatted_val}</td>"
+              else:
+                html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{formatted_val}</td>"
+            except ValueError:
+              html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{val}</td>"
+
+        html_table += "</tr>"
+
+      html_table += "</tbody></table></div>"
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+      csv_export = master_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Complete Decline Summary Report (CSV)",
+          data=csv_export,
+          file_name="strict_aligned_atm_decline_summary.csv",
+          mime="text/csv",
+      )
+
+    elif selected_report == "2. ATM Transaction Success Rate Summary":
+      success_df = process_success_rate_matrix(uploaded_files)
+      st.subheader("2. ATM Transaction Success Rate Summary")
+      st.write(
+          "Day-to-day issuer success rates (%) by bank extracted directly from"
+          " daily files. Values strictly below **78%** are highlighted in red."
+      )
+
+      html_table = (
+          "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
+          " auto;'><table style='width: 100%; border-collapse: collapse; font-family:"
+          " sans-serif; font-size: 13px; text-align: center;'>"
+      )
+      html_table += "<thead><tr style='background-color: #f2f2f2;'>"
+      for col in success_df.columns:
+        html_table += f"<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>{col}</th>"
+      html_table += "</tr></thead><tbody>"
+
+      for idx, row in success_df.iterrows():
+        is_avg_row = str(row["Bank/Date"]).upper() == "AVERAGE"
+        row_bg = (
+            "background-color: #e8f5e9; font-weight: bold;"
+            if is_avg_row
+            else ""
+        )
+        html_table += f"<tr style='{row_bg}'>"
+
+        for col_idx, col in enumerate(success_df.columns):
+          val = row[col]
+          if col_idx == 0:
+            html_table += f"<td style='border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: left;'>{val}</td>"
+          else:
+            try:
+              num_val = float(val)
+              formatted_val = f"{num_val:.1f}%"
+              if num_val < 78.0:
+                html_table += f"<td style='border: 1px solid #ddd; padding: 6px; color: red; font-weight: bold;'>{formatted_val}</td>"
+              else:
+                html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{formatted_val}</td>"
+            except ValueError:
+              html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{val}</td>"
+
+        html_table += "</tr>"
+
+      html_table += "</tbody></table></div>"
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+      csv_export = success_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Success Rate Summary Report (CSV)",
+          data=csv_export,
+          file_name="atm_success_rate_summary.csv",
+          mime="text/csv",
+      )
+
+    elif selected_report == "3. ATM success rate ranking":
+      success_df = process_success_rate_matrix(uploaded_files)
+      ranking_df = process_success_rate_ranking(success_df)
+
+      st.subheader("3. ATM Success Rate Ranking")
+      st.write(
+          "Participant ranking based on monthly average success rates evaluated"
+          " against the **98.5%** target threshold."
+      )
+
+      html_table = (
+          "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
+          " auto;'><table style='width: 100%; border-collapse: collapse; font-family:"
+          " sans-serif; font-size: 13px; text-align: center;'>"
+      )
+      html_table += "<thead><tr style='background-color: #f2f2f2;'>"
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Rank</th>"
+      )
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Participant</th>"
+      )
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Success rate</th>"
+      )
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Target status</th>"
+      )
+      html_table += "</tr></thead><tbody>"
+
+      for idx, row in ranking_df.iterrows():
+        is_below = row["Target status"] == "Below target"
+        status_color = "color: red; font-weight: bold;" if is_below else ""
+        html_table += "<tr>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px; font-weight: bold;'>{row['Rank']}</td>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold;'>{row['Participant']}</td>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{row['Success rate formatted']}</td>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px; {status_color}'>{row['Target status']}</td>"
+        html_table += "</tr>"
+
+      html_table += "</tbody></table></div>"
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+      export_df = ranking_df[
+          ["Rank", "Participant", "Success rate formatted", "Target status"]
+      ].copy()
+      export_df.rename(
+          columns={"Success rate formatted": "Success rate"}, inplace=True
+      )
+      csv_export = export_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Success Rate Ranking Report (CSV)",
+          data=csv_export,
+          file_name="atm_success_rate_ranking.csv",
+          mime="text/csv",
+      )
+
+    elif selected_report == "4. ATM decline contribution by participant":
+      master_df = process_strict_daily_matrix(uploaded_files)
+      contrib_df = process_decline_contribution(master_df)
+
+      st.subheader("4. ATM Decline Contribution by Participant")
+      st.write(
+          "Participant contribution share of total ATM declined transactions"
+          " computed from the monthly aggregated decline matrix."
+      )
+
+      html_table = (
+          "<div style='max-height: 600px; overflow-y: auto; overflow-x:"
+          " auto;'><table style='width: 100%; border-collapse: collapse; font-family:"
+          " sans-serif; font-size: 13px; text-align: center;'>"
+      )
+      html_table += "<thead><tr style='background-color: #f2f2f2;'>"
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Participant</th>"
+      )
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Declined"
+          " transactions</th>"
+      )
+      html_table += (
+          "<th style='border: 1px solid #ddd; padding: 8px; position: sticky;"
+          " top: 0; background-color: #f2f2f2; z-index: 1;'>Share of ATM"
+          " declines</th>"
+      )
+      html_table += "</tr></thead><tbody>"
+
+      for idx, row in contrib_df.iterrows():
+        html_table += "<tr>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold;'>{row['Participant']}</td>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{row['Declined transactions formatted']}</td>"
+        html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{row['Share formatted']}</td>"
+        html_table += "</tr>"
+
+      html_table += "</tbody></table></div>"
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+      export_df = contrib_df[
+          ["Participant", "Declined transactions", "Share formatted"]
+      ].copy()
+      export_df.rename(columns={"Share formatted": "Share of ATM declines"}, inplace=True)
+      csv_export = export_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Decline Contribution Report (CSV)",
+          data=csv_export,
+          file_name="atm_decline_contribution_by_participant.csv",
+          mime="text/csv",
+      )
+
+    elif selected_report == "5. Major ATM declined transactions":
+      st.subheader("5. Major ATM Declined Transactions")
+      st.info(
+          "Report logic for major response codes and error descriptions will"
+          " be populated here next."
+      )
+
+  except Exception as e:
+    st.error(f"An error occurred while processing daily files: {e}")
