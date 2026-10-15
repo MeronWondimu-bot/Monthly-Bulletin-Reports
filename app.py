@@ -112,9 +112,64 @@ else:
   # --- REPORT 1: ATM DECLINE SUMMARY ---
   elif selected_report == "1. ATM decline summery":
     st.subheader("1. ATM Decline Summary")
-    # Example logic: Filter by declined transactions
-    # df_declined = df[df['Status'] == 'Decline']
-    # st.dataframe(df_declined)
+    elif selected_report == "1. ATM decline summery":
+    st.subheader("1. ATM Decline Summary")
+    st.write(
+        "Aggregated transaction decline response summary across participating"
+        " banks."
+    )
+
+    try:
+      # Option to choose between monthly summary sheet or aggregating all daily sheets
+      sheet_choice = st.radio(
+          "Select Data Source for Decline Summary:",
+          ["Monthly Summary Sheet (Sheet16)", "Aggregate All Daily Sheets"],
+          horizontal=True,
+      )
+
+      if sheet_choice == "Monthly Summary Sheet (Sheet16)":
+        # Read the summary sheet (header starts at row index 2 where 'RC/BANK NAME' is)
+        df_decline = pd.read_excel(uploaded_file, sheet_name="Sheet16", header=2)
+      else:
+        # If aggregating all daily sheets (Sheets 1 to 30)
+        daily_sheets = [s for s in xls.sheet_names if s != "Sheet16"]
+        all_dfs = []
+        for s in daily_sheets:
+          temp_df = pd.read_excel(uploaded_file, sheet_name=s, header=2)
+          all_dfs.append(temp_df)
+        # Combine and group by Response Code
+        combined = pd.concat(all_dfs, ignore_index=True)
+        # Clean and sum up numeric columns by RC/BANK NAME
+        df_decline = combined.groupby(combined.columns[0], as_index=False).sum(
+            numeric_only=True
+        )
+
+      # Clean up header row
+      df_decline.columns = [str(c).strip() for c in df_decline.columns]
+
+      # Display interactive dataframe
+      st.markdown("### 📊 Decline Summary Matrix")
+      st.dataframe(df_decline, use_container_width=True)
+
+      # Key Metrics summary
+      if "Total" in df_decline.columns:
+        total_declines = df_decline["Total"].sum()
+        st.metric(
+            label="Total Declined Transactions (Period)",
+            value=f"{total_declines:,.0f}",
+        )
+
+      # Download Button
+      csv_export = df_decline.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Decline Summary Report (CSV)",
+          data=csv_export,
+          file_name="atm_decline_summary_report.csv",
+          mime="text/csv",
+      )
+
+    except Exception as e:
+      st.error(f"Error processing decline summary data: {e}")
 
   # --- REPORT 2: SUCCESS RATE SUMMARY ---
   elif selected_report == "2. ATM Transaction Success Rate Summary":
