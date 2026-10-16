@@ -51,7 +51,7 @@ st.markdown(
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Define standard bank columns in exact expected order
+# Define standard bank columns in exact expected order (excluding GADAA)
 STANDARD_BANKS = [
     "CBE",
     "BOA",
@@ -108,6 +108,8 @@ BANK_ALIASES = {
 
 def standardize_bank_name(col_name):
   cleaned = str(col_name).strip().upper()
+  if "GADAA" in cleaned:
+    return None  # Filter out GADAA explicitly
   for std_code, aliases in BANK_ALIASES.items():
     if cleaned == std_code or cleaned in aliases:
       return std_code
@@ -154,12 +156,20 @@ def process_strict_daily_matrix(uploaded_files):
 
     if header_row_idx is not None:
       df_day = pd.read_excel(file, header=header_row_idx)
-      df_day.columns = [
-          standardize_bank_name(c) if i > 0 else str(c).strip()
-          for i, c in enumerate(df_day.columns)
-      ]
-      rc_col = df_day.columns[0]
+      # Standardize columns and drop any unmapped/GADAA columns
+      new_cols = []
+      for i, c in enumerate(df_day.columns):
+        if i == 0:
+          new_cols.append(str(c).strip())
+        else:
+          std = standardize_bank_name(c)
+          new_cols.append(std if std in STANDARD_BANKS else None)
+      df_day.columns = new_cols
 
+      # Drop None/GADAA columns if they exist
+      df_day = df_day.loc[:, df_day.columns.notna()]
+
+      rc_col = df_day.columns[0]
       df_day = df_day.dropna(subset=[rc_col])
       df_day = df_day[
           df_day[rc_col].astype(str).str.replace(".", "", regex=False).str.isdigit()
@@ -249,11 +259,17 @@ def process_success_rate_matrix(uploaded_files):
             col_pos = header_cols.index(bank)
             val = success_row.iloc[col_pos]
             try:
-              val_str = str(val).replace("%", "").strip()
-              num = float(val_str)
-              if num <= 1.0 and num > 0:
-                num = num * 100
-              bank_success_rates[bank] = round(num, 1)
+              if pd.isna(val):
+                bank_success_rates[bank] = 100.0
+              else:
+                val_str = str(val).replace("%", "").strip()
+                if val_str.lower() == "nan" or val_str == "":
+                  bank_success_rates[bank] = 100.0
+                else:
+                  num = float(val_str)
+                  if num <= 1.0 and num > 0:
+                    num = num * 100
+                  bank_success_rates[bank] = round(num, 1)
             except ValueError:
               bank_success_rates[bank] = 100.0
           else:
@@ -303,7 +319,8 @@ def process_success_rate_ranking(success_df):
   ranking_data = []
   for bank in STANDARD_BANKS:
     if bank in avg_row.columns:
-      val = round(float(avg_row[bank].values[0]), 1)
+      val_raw = avg_row[bank].values[0]
+      val = round(float(val_raw), 1) if pd.notna(val_raw) else 100.0
       target_status = "Meets target" if val >= 98.5 else "Below target"
       ranking_data.append(
           {"Participant": bank, "Success rate": val, "Target status": target_status}
@@ -540,14 +557,16 @@ else:
             html_table += f"<td style='border: 1px solid #ddd; padding: 6px; font-weight: bold; text-align: left;'>{val}</td>"
           else:
             try:
-              num_val = float(val)
+              num_val = float(val) if pd.notna(val) else 100.0
               formatted_val = f"{num_val:.1f}%"
               if num_val < 78.0:
                 html_table += f"<td style='border: 1px solid #ddd; padding: 6px; color: red; font-weight: bold;'>{formatted_val}</td>"
               else:
                 html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{formatted_val}</td>"
-            except ValueError:
-              html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{val}</td>"
+            except (ValueError, TypeError):
+              html_table += (
+                  f"<td style='border: 1px solid #ddd; padding: 6px;'>100.0%</td>"
+              )
 
         html_table += "</tr>"
 
