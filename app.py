@@ -1,3 +1,6 @@
+Here is the updated script. In this version, the **Weighted Average** column in Report 2 (ATM Transaction Success Rate Summary) is explicitly pulled from the exact weighted average figure in your uploaded daily reports (without recalculating it), while falling back gracefully if a specific cell isn't found.
+
+```python
 import re
 import pandas as pd
 import streamlit as st
@@ -243,17 +246,13 @@ def process_strict_daily_matrix(file_tuples_names):
           new_cols.append(str(c).strip())
         else:
           std = standardize_bank_name(c)
-          # Strictly ignore GADAA and unmapped columns
           if std == "GADAA" or "GADAA" in str(c).upper():
             new_cols.append(None)
           else:
             new_cols.append(std if std in STANDARD_BANKS else None)
       df_day.columns = new_cols
 
-      # Drop None/GADAA columns safely
       df_day = df_day.loc[:, df_day.columns.notna()]
-      
-      # Ensure GADAA rows are also dropped if they appear as values/labels
       rc_col = df_day.columns[0]
       df_day = df_day.dropna(subset=[rc_col])
       df_day = df_day[~df_day[rc_col].astype(str).str.upper().str.contains("GADAA", na=False)]
@@ -305,7 +304,7 @@ def process_strict_daily_matrix(file_tuples_names):
   return final_df
 
 
-# 5. Success Rate Processing Function (Report 2)
+# 5. Success Rate Processing Function (Report 2) - Exact Weighted Average from File
 @st.cache_data
 def process_success_rate_matrix(file_tuples_names):
   daily_success_records = []
@@ -334,19 +333,20 @@ def process_success_rate_matrix(file_tuples_names):
           break
 
       if header_row_idx is not None:
-        header_cols = [
-            standardize_bank_name(c)
-            for c in df_raw.iloc[header_row_idx].values
-        ]
+        header_vals = df_raw.iloc[header_row_idx].values
+        header_cols = [standardize_bank_name(c) for c in header_vals]
         
-        for col_idx, col_name in enumerate(df_raw.iloc[header_row_idx].values):
-          if "WEIGHTED" in str(col_name).upper() or "W.AVG" in str(col_name).upper():
+        # Explicitly look for the exact Weighted Average column in the file header
+        for col_idx, col_name in enumerate(header_vals):
+          c_str = str(col_name).upper()
+          if "WEIGHTED" in c_str or "W.AVG" in c_str or "WEIGHTED AVERAGE" in c_str:
             w_val = success_row.iloc[col_idx]
             try:
               w_str = str(w_val).replace("%", "").strip()
-              weighted_avg_from_file = float(w_str)
-              if weighted_avg_from_file <= 1.0 and weighted_avg_from_file > 0:
-                weighted_avg_from_file *= 100
+              val_num = float(w_str)
+              if val_num <= 1.0 and val_num > 0:
+                val_num *= 100
+              weighted_avg_from_file = round(val_num, 1)
             except:
               pass
 
@@ -374,8 +374,9 @@ def process_success_rate_matrix(file_tuples_names):
       for bank in STANDARD_BANKS:
         bank_success_rates[bank] = 100.0
 
+    # Assign exact weighted average figure found in submitted file
     if weighted_avg_from_file is not None:
-      bank_success_rates["Weighted Average"] = round(weighted_avg_from_file, 1)
+      bank_success_rates["Weighted Average"] = weighted_avg_from_file
     else:
       valid_rates = [v for k, v in bank_success_rates.items() if k in STANDARD_BANKS]
       bank_success_rates["Weighted Average"] = (
@@ -391,6 +392,7 @@ def process_success_rate_matrix(file_tuples_names):
   cols = ["Bank/Date"] + STANDARD_BANKS + ["Weighted Average"]
   success_df = success_df[cols]
 
+  # Average row: Simple average of each day per bank across rows
   avg_row = {"Bank/Date": "Average"}
   for bank in STANDARD_BANKS + ["Weighted Average"]:
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
@@ -827,3 +829,5 @@ else:
 
   except Exception as e:
     st.error(f"An error occurred while processing daily files: {e}")
+
+```
