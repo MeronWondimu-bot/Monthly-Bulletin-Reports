@@ -310,7 +310,6 @@ def process_success_rate_matrix(file_tuples_names):
     success_row = None
     weighted_avg_from_file = None
 
-    # Locate the row containing "ISSU" and "SUCC" / "RATE"
     for r_idx, row in df_raw.iterrows():
       row_str = " ".join([str(val) for val in row.values]).upper()
       if "ISSU" in row_str and ("SUCC" in row_str or "RATE" in row_str):
@@ -330,7 +329,6 @@ def process_success_rate_matrix(file_tuples_names):
         header_vals = df_raw.iloc[header_row_idx].values
         header_cols = [standardize_bank_name(c) for c in header_vals]
         
-        # Look for Weighted Average column header or the last summary column after banks
         for col_idx, col_name in enumerate(header_vals):
           c_str = str(col_name).upper()
           if any(term in c_str for term in ["WEIGHTED", "W.AVG", "TOTAL SUCCESS", "AVERAGE RATE", "AVERAGE"]):
@@ -345,7 +343,6 @@ def process_success_rate_matrix(file_tuples_names):
             except:
               pass
 
-        # If explicit weighted header wasn't matched, check the very last populated numeric column on that row
         if weighted_avg_from_file is None:
           for col_idx in range(len(header_vals) - 1, -1, -1):
             val = success_row.iloc[col_idx]
@@ -421,7 +418,3 @@ def process_success_rate_ranking(success_df):
   avg_row = success_df[success_df["Bank/Date"].astype(str).str.upper() == "AVERAGE"]
   if avg_row.empty:
     return None
-
-  ranking_data = []
-  for bank in STANDARD_BANKS:
-    if bank in avg_
