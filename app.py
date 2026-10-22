@@ -216,4 +216,4 @@ def process_strict_daily_matrix(file_tuples_names):
   total_row["RC/BANK NAME"] = "TOTAL"
   total_row["Total"] = total_row[STANDARD_BANKS].sum(axis=1)
   total_row[STANDARD_BANKS] = total_row[STANDARD_BANKS].astype(int)
-  total_row["Total"] = total_row["Total"].astype
+  total_
