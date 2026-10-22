@@ -1,4 +1,3 @@
-import os
 import re
 import pandas as pd
 import streamlit as st
@@ -37,7 +36,7 @@ with col3:
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# 3. Orange Highlight Banner (Solid Orange Background with Black Text)
+# 3. Orange Highlight Banner
 st.markdown(
     """
     <div style="background-color: #E65100; border-left: 6px solid #B7410E; padding: 12px; border-radius: 4px; text-align: center;">
@@ -51,7 +50,6 @@ st.markdown(
 
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Define standard bank columns in exact expected order (excluding GADAA)
 STANDARD_BANKS = [
     "CBE",
     "BOA",
@@ -78,7 +76,6 @@ STANDARD_BANKS = [
     "Tseday",
 ]
 
-# Comprehensive bank alias mapping for full names & short codes
 BANK_ALIASES = {
     "CBE": ["CBE", "COMMERCIAL BANK OF ETHIOPIA", "COMMERCIAL", "COMM"],
     "BOA": ["BOA", "BANK OF ABYSSINIA", "ABYSSINIA"],
@@ -109,7 +106,7 @@ BANK_ALIASES = {
 def standardize_bank_name(col_name):
   cleaned = str(col_name).strip().upper()
   if "GADAA" in cleaned:
-    return None  # Filter out GADAA explicitly
+    return None
   for std_code, aliases in BANK_ALIASES.items():
     if cleaned == std_code or cleaned in aliases:
       return std_code
@@ -119,7 +116,6 @@ def standardize_bank_name(col_name):
   return cleaned
 
 
-# Helper function to extract date label like '1-Sep' from filename
 def extract_date_label(filename, index):
   m = re.search(
       r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-_]*(\d{1,2})",
@@ -138,25 +134,110 @@ def extract_date_label(filename, index):
   return f"{index}-Sep"
 
 
+def extract_datetime_from_file(file):
+  """Attempts to extract a real datetime object from filename or content for filtering."""
+  filename = getattr(file, "name", "")
+  m = re.search(
+      r"(\d{1,2})[\s\-_]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-_]*(\d{4})?",
+      filename,
+      re.IGNORECASE,
+  )
+  if m:
+    day, mon, yr = m.group(1), m.group(2), m.group(3)
+    year_str = yr if yr else "2026"
+    try:
+      return pd.to_datetime(f"{day} {mon} {year_str}")
+    except:
+      pass
+  return None
+
+
+# 9. Multi-File Uploader Section with Date Checking & Filtering
+st.markdown("### 📁 **Upload Daily Source Reports**")
+uploaded_files = st.file_uploader(
+    "Upload all daily ATM decline report files for the month",
+    type=["xlsx", "xls"],
+    accept_multiple_files=True,
+)
+
+filtered_files = uploaded_files
+if uploaded_files:
+  file_dates = []
+  file_map = {}
+  for idx, f in enumerate(uploaded_files):
+    dt = extract_datetime_from_file(f)
+    if dt is not None:
+      file_dates.append(dt)
+      file_map[dt] = f
+    else:
+      fallback_dt = pd.to_datetime(f"2026-09-{idx+1:02d}")
+      file_dates.append(fallback_dt)
+      file_map[fallback_dt] = f
+
+  min_dt = min(file_dates)
+  max_dt = max(file_dates)
+
+  st.markdown("---")
+  st.subheader("📅 **File Date Verification & Filtering**")
+  date_filter_option = st.radio(
+      "Filter source reports by date?", ["All Uploaded Files", "Custom Date Range"], horizontal=True
+  )
+
+  if date_filter_option == "Custom Date Range":
+    selected_range = st.date_input(
+        "Select Report Date Range",
+        value=(min_dt.date(), max_dt.date()),
+        min_value=min_dt.date(),
+        max_value=max_dt.date(),
+    )
+    if isinstance(selected_range, tuple) and len(selected_range) == 2:
+      start_d, end_d = selected_range
+      filtered_files = [
+          file_map[dt]
+          for dt in file_dates
+          if start_d <= dt.date() <= end_d
+      ]
+
+st.markdown("---")
+
+# 10. Report Selection
+st.markdown("### **Report Type**")
+
+report_options = [
+    "Home / Overview",
+    "1. ATM decline summery",
+    "2. ATM Transaction Success Rate Summary",
+    "3. ATM success rate ranking",
+    "4. ATM decline contribution by participant",
+    "5. Major ATM declined transactions",
+]
+
+selected_report = st.radio(
+    "Select Report Type",
+    report_options,
+    horizontal=False,
+    label_visibility="collapsed",
+)
+
+st.markdown("---")
+
+
 # 4. Strict Line-by-Line Aggregation Function (Report 1)
 @st.cache_data
-def process_strict_daily_matrix(uploaded_files):
+def process_strict_daily_matrix(file_tuples_names):
   daily_matrices = []
   all_rcs_set = set()
 
-  for file in uploaded_files:
+  for file in file_tuples_names:
     df_raw = pd.read_excel(file, header=None)
     header_row_idx = None
     for idx, row in df_raw.iterrows():
-      if (
-          row.astype(str).str.contains("RC/BANK NAME", case=False, na=False).any()
-      ):
+      if row.astype(str).str.contains("RC/BANK NAME", case=False, na=False).any():
         header_row_idx = idx
         break
 
     if header_row_idx is not None:
       df_day = pd.read_excel(file, header=header_row_idx)
-      # Standardize columns and drop any unmapped/GADAA columns
       new_cols = []
       for i, c in enumerate(df_day.columns):
         if i == 0:
@@ -166,9 +247,7 @@ def process_strict_daily_matrix(uploaded_files):
           new_cols.append(std if std in STANDARD_BANKS else None)
       df_day.columns = new_cols
 
-      # Drop None/GADAA columns if they exist
       df_day = df_day.loc[:, df_day.columns.notna()]
-
       rc_col = df_day.columns[0]
       df_day = df_day.dropna(subset=[rc_col])
       df_day = df_day[
@@ -183,9 +262,7 @@ def process_strict_daily_matrix(uploaded_files):
 
       df_day.set_index(rc_col, inplace=True)
       df_numeric = (
-          df_day[STANDARD_BANKS]
-          .apply(pd.to_numeric, errors="coerce")
-          .fillna(0)
+          df_day[STANDARD_BANKS].apply(pd.to_numeric, errors="coerce").fillna(0)
       )
 
       all_rcs_set.update(df_numeric.index)
@@ -206,6 +283,8 @@ def process_strict_daily_matrix(uploaded_files):
   final_df = master_grid.reset_index()
   final_df.rename(columns={final_df.columns[0]: "RC/BANK NAME"}, inplace=True)
   final_df[STANDARD_BANKS] = final_df[STANDARD_BANKS].astype(int)
+  
+  # Total column calculates the sum of all bank columns row-by-row
   final_df["Total"] = final_df[STANDARD_BANKS].sum(axis=1)
 
   total_row = final_df[STANDARD_BANKS].sum(numeric_only=True).to_frame().T
@@ -220,15 +299,16 @@ def process_strict_daily_matrix(uploaded_files):
 
 # 5. Success Rate Processing Function (Report 2)
 @st.cache_data
-def process_success_rate_matrix(uploaded_files):
+def process_success_rate_matrix(file_tuples_names):
   daily_success_records = []
 
-  for idx, file in enumerate(uploaded_files, start=1):
+  for idx, file in enumerate(file_tuples_names, start=1):
     filename = getattr(file, "name", f"file_{idx}.xlsx")
     date_label = extract_date_label(filename, idx)
 
     df_raw = pd.read_excel(file, header=None)
     success_row = None
+    weighted_avg_from_file = None
 
     for r_idx, row in df_raw.iterrows():
       row_str = " ".join([str(val) for val in row.values]).upper()
@@ -241,11 +321,7 @@ def process_success_rate_matrix(uploaded_files):
     if success_row is not None:
       header_row_idx = None
       for r_idx, row in df_raw.iterrows():
-        if (
-            row.astype(str)
-            .str.contains("RC/BANK NAME", case=False, na=False)
-            .any()
-        ):
+        if row.astype(str).str.contains("RC/BANK NAME", case=False, na=False).any():
           header_row_idx = r_idx
           break
 
@@ -254,6 +330,19 @@ def process_success_rate_matrix(uploaded_files):
             standardize_bank_name(c)
             for c in df_raw.iloc[header_row_idx].values
         ]
+        
+        # Check if there is an explicit Weighted Average column in the source file
+        for col_idx, col_name in enumerate(df_raw.iloc[header_row_idx].values):
+          if "WEIGHTED" in str(col_name).upper() or "W.AVG" in str(col_name).upper():
+            w_val = success_row.iloc[col_idx]
+            try:
+              w_str = str(w_val).replace("%", "").strip()
+              weighted_avg_from_file = float(w_str)
+              if weighted_avg_from_file <= 1.0 and weighted_avg_from_file > 0:
+                weighted_avg_from_file *= 100
+            except:
+              pass
+
         for bank in STANDARD_BANKS:
           if bank in header_cols:
             col_pos = header_cols.index(bank)
@@ -278,13 +367,14 @@ def process_success_rate_matrix(uploaded_files):
       for bank in STANDARD_BANKS:
         bank_success_rates[bank] = 100.0
 
-    valid_rates = [
-        v for k, v in bank_success_rates.items() if k in STANDARD_BANKS
-    ]
-    weighted_avg = (
-        round(sum(valid_rates) / len(valid_rates), 1) if valid_rates else 100.0
-    )
-    bank_success_rates["Weighted Average"] = weighted_avg
+    # Use exact weighted average figure from submitted file if available, else compute fallback
+    if weighted_avg_from_file is not None:
+      bank_success_rates["Weighted Average"] = round(weighted_avg_from_file, 1)
+    else:
+      valid_rates = [v for k, v in bank_success_rates.items() if k in STANDARD_BANKS]
+      bank_success_rates["Weighted Average"] = (
+          round(sum(valid_rates) / len(valid_rates), 1) if valid_rates else 100.0
+      )
 
     daily_success_records.append(bank_success_rates)
 
@@ -295,6 +385,7 @@ def process_success_rate_matrix(uploaded_files):
   cols = ["Bank/Date"] + STANDARD_BANKS + ["Weighted Average"]
   success_df = success_df[cols]
 
+  # Average row: Simple average of each day per bank across rows
   avg_row = {"Bank/Date": "Average"}
   for bank in STANDARD_BANKS + ["Weighted Average"]:
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
@@ -422,39 +513,8 @@ def process_major_declines(master_df):
   return major_df
 
 
-# 9. Multi-File Uploader Section
-st.markdown("### 📁 **Upload Daily Source Reports**")
-uploaded_files = st.file_uploader(
-    "Upload all daily ATM decline report files for the month",
-    type=["xlsx", "xls"],
-    accept_multiple_files=True,
-)
-
-st.markdown("---")
-
-# 10. Report Selection (Stacked Ordered List)
-st.markdown("### **Report Type**")
-
-report_options = [
-    "Home / Overview",
-    "1. ATM decline summery",
-    "2. ATM Transaction Success Rate Summary",
-    "3. ATM success rate ranking",
-    "4. ATM decline contribution by participant",
-    "5. Major ATM declined transactions",
-]
-
-selected_report = st.radio(
-    "Select Report Type",
-    report_options,
-    horizontal=False,
-    label_visibility="collapsed",
-)
-
-st.markdown("---")
-
 # 11. Core Execution Logic
-if not uploaded_files:
+if not filtered_files:
   st.info(
       "👈 Please upload your **daily report files** above to aggregate and"
       " generate reports."
@@ -464,7 +524,7 @@ else:
     if selected_report == "Home / Overview":
       st.subheader("Welcome to the Central Dashboard")
       st.success(
-          f"Successfully processed and aligned **{len(uploaded_files)} daily"
+          f"Successfully processed and aligned **{len(filtered_files)} daily"
           " report files** line-by-line."
       )
       st.write(
@@ -473,7 +533,7 @@ else:
       )
 
     elif selected_report == "1. ATM decline summery":
-      master_df = process_strict_daily_matrix(uploaded_files)
+      master_df = process_strict_daily_matrix(tuple(filtered_files))
       st.subheader("1. ATM Decline Summary (Monthly Aggregated Matrix)")
 
       html_table = (
@@ -525,7 +585,7 @@ else:
       )
 
     elif selected_report == "2. ATM Transaction Success Rate Summary":
-      success_df = process_success_rate_matrix(uploaded_files)
+      success_df = process_success_rate_matrix(tuple(filtered_files))
       st.subheader("2. ATM Transaction Success Rate Summary")
       st.write(
           "Day-to-day issuer success rates (%) by bank extracted directly from"
@@ -583,7 +643,7 @@ else:
       )
 
     elif selected_report == "3. ATM success rate ranking":
-      success_df = process_success_rate_matrix(uploaded_files)
+      success_df = process_success_rate_matrix(tuple(filtered_files))
       ranking_df = process_success_rate_ranking(success_df)
 
       st.subheader("3. ATM Success Rate Ranking")
@@ -645,7 +705,7 @@ else:
       )
 
     elif selected_report == "4. ATM decline contribution by participant":
-      master_df = process_strict_daily_matrix(uploaded_files)
+      master_df = process_strict_daily_matrix(tuple(filtered_files))
       contrib_df = process_decline_contribution(master_df)
 
       st.subheader("4. ATM Decline Contribution by Participant")
@@ -700,7 +760,7 @@ else:
       )
 
     elif selected_report == "5. Major ATM declined transactions":
-      master_df = process_strict_daily_matrix(uploaded_files)
+      master_df = process_strict_daily_matrix(tuple(filtered_files))
       major_df = process_major_declines(master_df)
 
       st.subheader("5. Major ATM Declined Transactions")
