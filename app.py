@@ -1,4 +1,6 @@
-Here is the updated script. In this version, the **Weighted Average** column in Report 2 (ATM Transaction Success Rate Summary) is explicitly pulled from the exact weighted average figure in your uploaded daily reports (without recalculating it), while falling back gracefully if a specific cell isn't found.
+Ah, I see what happened! It looks like some of the conversational text ("Here is the updated script...") accidentally got pasted into the very first line of your `app.py` file on GitHub/Streamlit, which is causing Python to throw a `SyntaxError`.
+
+Here is the **clean, pure Python script** with all your updates included (Gadaa excluded from the decline summary, correct row totals, exact weighted average from your files, and date filtering). Copy this entire code block and replace everything in your `app.py` file:
 
 ```python
 import re
@@ -291,7 +293,6 @@ def process_strict_daily_matrix(file_tuples_names):
   final_df.rename(columns={final_df.columns[0]: "RC/BANK NAME"}, inplace=True)
   final_df[STANDARD_BANKS] = final_df[STANDARD_BANKS].astype(int)
   
-  # Total column calculates the sum of all standard bank columns row-by-row
   final_df["Total"] = final_df[STANDARD_BANKS].sum(axis=1)
 
   total_row = final_df[STANDARD_BANKS].sum(numeric_only=True).to_frame().T
@@ -336,7 +337,6 @@ def process_success_rate_matrix(file_tuples_names):
         header_vals = df_raw.iloc[header_row_idx].values
         header_cols = [standardize_bank_name(c) for c in header_vals]
         
-        # Explicitly look for the exact Weighted Average column in the file header
         for col_idx, col_name in enumerate(header_vals):
           c_str = str(col_name).upper()
           if "WEIGHTED" in c_str or "W.AVG" in c_str or "WEIGHTED AVERAGE" in c_str:
@@ -374,7 +374,6 @@ def process_success_rate_matrix(file_tuples_names):
       for bank in STANDARD_BANKS:
         bank_success_rates[bank] = 100.0
 
-    # Assign exact weighted average figure found in submitted file
     if weighted_avg_from_file is not None:
       bank_success_rates["Weighted Average"] = weighted_avg_from_file
     else:
@@ -392,7 +391,6 @@ def process_success_rate_matrix(file_tuples_names):
   cols = ["Bank/Date"] + STANDARD_BANKS + ["Weighted Average"]
   success_df = success_df[cols]
 
-  # Average row: Simple average of each day per bank across rows
   avg_row = {"Bank/Date": "Average"}
   for bank in STANDARD_BANKS + ["Weighted Average"]:
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
@@ -831,3 +829,5 @@ else:
     st.error(f"An error occurred while processing daily files: {e}")
 
 ```
+
+Once saved, your app will automatically reboot and load successfully! Let me know how it goes.
