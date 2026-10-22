@@ -265,4 +265,103 @@ def process_success_rate_matrix(file_tuples_names):
           c_str = str(col_name).upper()
           if any(term in c_str for term in ["WEIGHTED", "W.AVG", "TOTAL", "AVERAGE"]):
             w_val = success_row.iloc[col_idx]
-            try
+            try:
+              w_str = str(w_val).replace("%", "").strip()
+              val_num = float(w_str)
+              if val_num <= 1.0 and val_num > 0:
+                val_num *= 100
+              weighted_avg_from_file = round(val_num, 1)
+              break
+            except:
+              pass
+
+        if weighted_avg_from_file is None:
+          for col_idx in range(len(success_row) - 1, max(0, len(success_row) - 6), -1):
+            val = success_row.iloc[col_idx]
+            try:
+              val_str = str(val).replace("%", "").strip()
+              num = float(val_str)
+              if 0 < num <= 100 or 0 < num <= 1.0:
+                if num <= 1.0:
+                  num *= 100
+                weighted_avg_from_file = round(num, 1)
+                break
+            except:
+              pass
+
+        for bank in STANDARD_BANKS:
+          if bank in header_cols:
+            col_pos = header_cols.index(bank)
+            val = success_row.iloc[col_pos]
+            try:
+              if pd.isna(val):
+                bank_success_rates[bank] = 100.0
+              else:
+                val_str = str(val).replace("%", "").strip()
+                if val_str.lower() == "nan" or val_str == "":
+                  bank_success_rates[bank] = 100.0
+                else:
+                  num = float(val_str)
+                  if num <= 1.0 and num > 0:
+                    num = num * 100
+                  bank_success_rates[bank] = round(num, 1)
+            except ValueError:
+              bank_success_rates[bank] = 100.0
+          else:
+            bank_success_rates[bank] = 100.0
+    else:
+      for bank in STANDARD_BANKS:
+        bank_success_rates[bank] = 100.0
+
+    if weighted_avg_from_file is not None:
+      bank_success_rates["Weighted Average"] = weighted_avg_from_file
+    else:
+      valid_rates = [v for k, v in bank_success_rates.items() if k in STANDARD_BANKS]
+      bank_success_rates["Weighted Average"] = round(sum(valid_rates) / len(valid_rates), 1) if valid_rates else 100.0
+
+    daily_success_records.append(bank_success_rates)
+
+  if not daily_success_records:
+    return None
+
+  success_df = pd.DataFrame(daily_success_records)
+  cols = ["Bank/Date"] + STANDARD_BANKS + ["Weighted Average"]
+  success_df = success_df[cols]
+
+  avg_row = {"Bank/Date": "Average"}
+  for bank in STANDARD_BANKS + ["Weighted Average"]:
+    col_vals = pd.to_numeric(success_df[bank], errors="coerce")
+    avg_row[bank] = round(col_vals.mean(), 1)
+
+  success_df = pd.concat([success_df, pd.DataFrame([avg_row])], ignore_index=True)
+  return success_df
+
+# 6. Success Rate Ranking Processing Function (Report 3)
+@st.cache_data
+def process_success_rate_ranking(success_df):
+  if success_df is None:
+    return None
+
+  avg_row = success_df[success_df["Bank/Date"].astype(str).str.upper() == "AVERAGE"]
+  if avg_row.empty:
+    return None
+
+  ranking_data = []
+  for bank in STANDARD_BANKS:
+    if bank in avg_row.columns:
+      val_raw = avg_row[bank].values[0]
+      val = round(float(val_raw), 1) if pd.notna(val_raw) else 100.0
+      target_status = "Meets target" if val >= 98.5 else "Below target"
+      ranking_data.append({"Participant": bank, "Success rate": val, "Target status": target_status})
+
+  ranking_df = pd.DataFrame(ranking_data)
+  ranking_df = ranking_df.sort_values(by="Success rate", ascending=False).reset_index(drop=True)
+  ranking_df.insert(0, "Rank", range(1, len(ranking_df) + 1))
+  ranking_df["Success rate formatted"] = ranking_df["Success rate"].map("{:.1f}%".format)
+
+  return ranking_df
+
+# 7. Decline Contribution Processing Function (Report 4)
+@st.cache_data
+def process_decline_contribution(master_df):
+  if
