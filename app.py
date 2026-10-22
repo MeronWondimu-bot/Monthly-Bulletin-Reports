@@ -16,20 +16,11 @@ with col1:
   st.markdown("## 🏢 **ETHSWITCH**")
 
 with col2:
-  st.markdown(
-      "<h1 style='text-align: center; color: #E65100; font-weight: bold; margin-bottom: 0;'>EthSwitch Performance Reporting Hub</h1>",
-      unsafe_allow_html=True,
-  )
-  st.markdown(
-      "<p style='text-align: center; color: #666666; margin-top: 0;'>Automated Bi-weekly & Monthly Report Generator</p>",
-      unsafe_allow_html=True,
-  )
+  st.markdown("<h1 style='text-align: center; color: #E65100; font-weight: bold; margin-bottom: 0;'>EthSwitch Performance Reporting Hub</h1>", unsafe_allow_html=True)
+  st.markdown("<p style='text-align: center; color: #666666; margin-top: 0;'>Automated Bi-weekly & Monthly Report Generator</p>", unsafe_allow_html=True)
 
 with col3:
-  st.markdown(
-      "<h2 style='text-align: right;'>🦜 <span style='color:#C2185B;'>EthioPay</span></h2>",
-      unsafe_allow_html=True,
-  )
+  st.markdown("<h2 style='text-align: right;'>🦜 <span style='color:#C2185B;'>EthioPay</span></h2>", unsafe_allow_html=True)
 
 st.markdown("<br>", unsafe_allow_html=True)
 
@@ -48,29 +39,9 @@ st.markdown(
 st.markdown("<br>", unsafe_allow_html=True)
 
 STANDARD_BANKS = [
-    "CBE",
-    "BOA",
-    "ABAY",
-    "DASHEN",
-    "WEGAGEN",
-    "ZEMEN",
-    "BUNNA",
-    "ENAT",
-    "DGB",
-    "LION",
-    "OIB",
-    "BRIB",
-    "UB",
-    "AIB",
-    "CBO",
-    "NIB",
-    "ADIB",
-    "ZAMZAM",
-    "HIJRA",
-    "AHADU",
-    "SINQEE",
-    "AMHARA",
-    "Tseday",
+    "CBE", "BOA", "ABAY", "DASHEN", "WEGAGEN", "ZEMEN", "BUNNA", "ENAT",
+    "DGB", "LION", "OIB", "BRIB", "UB", "AIB", "CBO", "NIB", "ADIB",
+    "ZAMZAM", "HIJRA", "AHADU", "SINQEE", "AMHARA", "Tseday"
 ]
 
 BANK_ALIASES = {
@@ -96,9 +67,8 @@ BANK_ALIASES = {
     "AHADU": ["AHADU", "AHADU BANK"],
     "SINQEE": ["SINQEE", "SINQEE BANK"],
     "AMHARA": ["AMHARA", "AMHARA BANK"],
-    "Tseday": ["TSEDAY", "TSEDAY BANK", "TSEDAY BANK S.C."],
+    "Tseday": ["TSEDAY", "TSEDAY BANK", "TSEDAY BANK S.C."]
 }
-
 
 def standardize_bank_name(col_name):
   cleaned = str(col_name).strip().upper()
@@ -112,32 +82,18 @@ def standardize_bank_name(col_name):
         return std_code
   return cleaned
 
-
 def extract_date_label(filename, index):
-  m = re.search(
-      r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-_]*(\d{1,2})",
-      filename,
-      re.IGNORECASE,
-  )
+  m = re.search(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-_]*(\d{1,2})", filename, re.IGNORECASE)
   if m:
     return f"{int(m.group(2))}-{m.group(1)[:3].capitalize()}"
-  m2 = re.search(
-      r"(\d{1,2})[\s\-_]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*",
-      filename,
-      re.IGNORECASE,
-  )
+  m2 = re.search(r"(\d{1,2})[\s\-_]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*", filename, re.IGNORECASE)
   if m2:
     return f"{int(m2.group(1))}-{m2.group(2)[:3].capitalize()}"
   return f"{index}-Sep"
 
-
 def extract_datetime_from_file(file):
   filename = getattr(file, "name", "")
-  m = re.search(
-      r"(\d{1,2})[\s\-_]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-_]*(\d{4})?",
-      filename,
-      re.IGNORECASE,
-  )
+  m = re.search(r"(\d{1,2})[\s\-_]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-_]*(\d{4})?", filename, re.IGNORECASE)
   if m:
     day, mon, yr = m.group(1), m.group(2), m.group(3)
     year_str = yr if yr else "2026"
@@ -147,14 +103,9 @@ def extract_datetime_from_file(file):
       pass
   return None
 
-
 # 9. Multi-File Uploader Section with Date Checking & Filtering
 st.markdown("### 📁 **Upload Daily Source Reports**")
-uploaded_files = st.file_uploader(
-    "Upload all daily ATM decline report files for the month",
-    type=["xlsx", "xls"],
-    accept_multiple_files=True,
-)
+uploaded_files = st.file_uploader("Upload all daily ATM decline report files for the month", type=["xlsx", "xls"], accept_multiple_files=True)
 
 filtered_files = uploaded_files
 if uploaded_files:
@@ -175,48 +126,28 @@ if uploaded_files:
 
   st.markdown("---")
   st.subheader("📅 **File Date Verification & Filtering**")
-  date_filter_option = st.radio(
-      "Filter source reports by date?", ["All Uploaded Files", "Custom Date Range"], horizontal=True
-  )
+  date_filter_option = st.radio("Filter source reports by date?", ["All Uploaded Files", "Custom Date Range"], horizontal=True)
 
   if date_filter_option == "Custom Date Range":
-    selected_range = st.date_input(
-        "Select Report Date Range",
-        value=(min_dt.date(), max_dt.date()),
-        min_value=min_dt.date(),
-        max_value=max_dt.date(),
-    )
+    selected_range = st.date_input("Select Report Date Range", value=(min_dt.date(), max_dt.date()), min_value=min_dt.date(), max_value=max_dt.date())
     if isinstance(selected_range, tuple) and len(selected_range) == 2:
       start_d, end_d = selected_range
-      filtered_files = [
-          file_map[dt]
-          for dt in file_dates
-          if start_d <= dt.date() <= end_d
-      ]
+      filtered_files = [file_map[dt] for dt in file_dates if start_d <= dt.date() <= end_d]
 
 st.markdown("---")
 
 # 10. Report Selection
 st.markdown("### **Report Type**")
-
 report_options = [
     "Home / Overview",
     "1. ATM decline summery",
     "2. ATM Transaction Success Rate Summary",
     "3. ATM success rate ranking",
     "4. ATM decline contribution by participant",
-    "5. Major ATM declined transactions",
+    "5. Major ATM declined transactions"
 ]
-
-selected_report = st.radio(
-    "Select Report Type",
-    report_options,
-    horizontal=False,
-    label_visibility="collapsed",
-)
-
+selected_report = st.radio("Select Report Type", report_options, horizontal=False, label_visibility="collapsed")
 st.markdown("---")
-
 
 # 4. Strict Line-by-Line Aggregation Function (Report 1) - GADAA Excluded
 @st.cache_data
@@ -251,9 +182,7 @@ def process_strict_daily_matrix(file_tuples_names):
       df_day = df_day.dropna(subset=[rc_col])
       df_day = df_day[~df_day[rc_col].astype(str).str.upper().str.contains("GADAA", na=False)]
       
-      df_day = df_day[
-          df_day[rc_col].astype(str).str.replace(".", "", regex=False).str.isdigit()
-      ].copy()
+      df_day = df_day[df_day[rc_col].astype(str).str.replace(".", "", regex=False).str.isdigit()].copy()
       df_day[rc_col] = df_day[rc_col].astype(str).str.strip()
       df_day = df_day.drop_duplicates(subset=[rc_col], keep="first")
 
@@ -262,9 +191,7 @@ def process_strict_daily_matrix(file_tuples_names):
           df_day[bank] = 0
 
       df_day.set_index(rc_col, inplace=True)
-      df_numeric = (
-          df_day[STANDARD_BANKS].apply(pd.to_numeric, errors="coerce").fillna(0)
-      )
+      df_numeric = df_day[STANDARD_BANKS].apply(pd.to_numeric, errors="coerce").fillna(0)
 
       all_rcs_set.update(df_numeric.index)
       daily_matrices.append(df_numeric)
@@ -276,9 +203,7 @@ def process_strict_daily_matrix(file_tuples_names):
   master_grid = pd.DataFrame(0.0, index=sorted_rcs, columns=STANDARD_BANKS)
 
   for mat in daily_matrices:
-    aligned_mat = mat.reindex(
-        index=sorted_rcs, columns=STANDARD_BANKS, fill_value=0
-    )
+    aligned_mat = mat.reindex(index=sorted_rcs, columns=STANDARD_BANKS, fill_value=0)
     master_grid = master_grid.add(aligned_mat, fill_value=0)
 
   final_df = master_grid.reset_index()
@@ -296,8 +221,7 @@ def process_strict_daily_matrix(file_tuples_names):
   final_df = pd.concat([final_df, total_row], ignore_index=True)
   return final_df
 
-
-# 5. Success Rate Processing Function (Report 2) - Targeted "Issu. SUCC. RATE (%)" row scanning
+# 5. Success Rate Processing Function (Report 2)
 @st.cache_data
 def process_success_rate_matrix(file_tuples_names):
   daily_success_records = []
@@ -310,7 +234,6 @@ def process_success_rate_matrix(file_tuples_names):
     success_row = None
     weighted_avg_from_file = None
 
-    # Scan specifically for the row containing "ISSU" and "SUCC" / "RATE"
     for r_idx, row in df_raw.iterrows():
       row_str = " ".join([str(val) for val in row.values]).upper()
       if "ISSU" in row_str and ("SUCC" in row_str or "RATE" in row_str):
@@ -330,7 +253,6 @@ def process_success_rate_matrix(file_tuples_names):
         header_vals = df_raw.iloc[header_row_idx].values
         header_cols = [standardize_bank_name(c) for c in header_vals]
         
-        # Look for explicit Weighted Average / Total column headers
         for col_idx, col_name in enumerate(header_vals):
           c_str = str(col_name).upper()
           if any(term in c_str for term in ["WEIGHTED", "W.AVG", "TOTAL", "AVERAGE"]):
@@ -345,7 +267,6 @@ def process_success_rate_matrix(file_tuples_names):
             except:
               pass
 
-        # If not found via header, check the last 3 cells of the success row for the summary figure
         if weighted_avg_from_file is None:
           for col_idx in range(len(header_vals) - 1, max(0, len(header_vals) - 5), -1):
             val = success_row.iloc[col_idx]
@@ -388,9 +309,7 @@ def process_success_rate_matrix(file_tuples_names):
       bank_success_rates["Weighted Average"] = weighted_avg_from_file
     else:
       valid_rates = [v for k, v in bank_success_rates.items() if k in STANDARD_BANKS]
-      bank_success_rates["Weighted Average"] = (
-          round(sum(valid_rates) / len(valid_rates), 1) if valid_rates else 100.0
-      )
+      bank_success_rates["Weighted Average"] = round(sum(valid_rates) / len(valid_rates), 1) if valid_rates else 100.0
 
     daily_success_records.append(bank_success_rates)
 
@@ -406,11 +325,8 @@ def process_success_rate_matrix(file_tuples_names):
     col_vals = pd.to_numeric(success_df[bank], errors="coerce")
     avg_row[bank] = round(col_vals.mean(), 1)
 
-  success_df = pd.concat(
-      [success_df, pd.DataFrame([avg_row])], ignore_index=True
-  )
+  success_df = pd.concat([success_df, pd.DataFrame([avg_row])], ignore_index=True)
   return success_df
-
 
 # 6. Success Rate Ranking Processing Function (Report 3)
 @st.cache_data
@@ -428,21 +344,14 @@ def process_success_rate_ranking(success_df):
       val_raw = avg_row[bank].values[0]
       val = round(float(val_raw), 1) if pd.notna(val_raw) else 100.0
       target_status = "Meets target" if val >= 98.5 else "Below target"
-      ranking_data.append(
-          {"Participant": bank, "Success rate": val, "Target status": target_status}
-      )
+      ranking_data.append({"Participant": bank, "Success rate": val, "Target status": target_status})
 
   ranking_df = pd.DataFrame(ranking_data)
-  ranking_df = ranking_df.sort_values(
-      by="Success rate", ascending=False
-  ).reset_index(drop=True)
+  ranking_df = ranking_df.sort_values(by="Success rate", ascending=False).reset_index(drop=True)
   ranking_df.insert(0, "Rank", range(1, len(ranking_df) + 1))
-  ranking_df["Success rate formatted"] = ranking_df["Success rate"].map(
-      "{:.1f}%".format
-  )
+  ranking_df["Success rate formatted"] = ranking_df["Success rate"].map("{:.1f}%".format)
 
   return ranking_df
-
 
 # 7. Decline Contribution Processing Function (Report 4)
 @st.cache_data
@@ -450,9 +359,7 @@ def process_decline_contribution(master_df):
   if master_df is None:
     return None
 
-  total_row_df = master_df[
-      master_df["RC/BANK NAME"].astype(str).str.upper() == "TOTAL"
-  ]
+  total_row_df = master_df[master_df["RC/BANK NAME"].astype(str).str.upper() == "TOTAL"]
   if total_row_df.empty:
     return None
 
@@ -462,31 +369,20 @@ def process_decline_contribution(master_df):
   for bank in STANDARD_BANKS:
     if bank in total_row_df.columns:
       declines = int(total_row_df[bank].values[0])
-      share = (
-          (declines / total_declines_all) * 100 if total_declines_all > 0 else 0.0
-      )
-      contribution_data.append(
-          {
-              "Participant": bank,
-              "Declined transactions": declines,
-              "Share of ATM declines": round(share, 2),
-          }
-      )
+      share = (declines / total_declines_all) * 100 if total_declines_all > 0 else 0.0
+      contribution_data.append({
+          "Participant": bank,
+          "Declined transactions": declines,
+          "Share of ATM declines": round(share, 2)
+      })
 
   contrib_df = pd.DataFrame(contribution_data)
-  contrib_df = contrib_df.sort_values(
-      by="Declined transactions", ascending=False
-  ).reset_index(drop=True)
+  contrib_df = contrib_df.sort_values(by="Declined transactions", ascending=False).reset_index(drop=True)
 
-  contrib_df["Declined transactions formatted"] = contrib_df[
-      "Declined transactions"
-  ].map("{:,}".format)
-  contrib_df["Share formatted"] = contrib_df["Share of ATM declines"].map(
-      lambda x: f"{x:.2f}%"
-  )
+  contrib_df["Declined transactions formatted"] = contrib_df["Declined transactions"].map("{:,}".format)
+  contrib_df["Share formatted"] = contrib_df["Share of ATM declines"].map(lambda x: f"{x:.2f}%")
 
   return contrib_df
-
 
 # 8. Major Declined Transactions Processing Function (Report 5)
 @st.cache_data
@@ -494,9 +390,7 @@ def process_major_declines(master_df):
   if master_df is None:
     return None
 
-  valid_matrix = master_df[
-      master_df["RC/BANK NAME"].astype(str).str.upper() != "TOTAL"
-  ].copy()
+  valid_matrix = master_df[master_df["RC/BANK NAME"].astype(str).str.upper() != "TOTAL"].copy()
   if valid_matrix.empty:
     return None
 
@@ -510,39 +404,26 @@ def process_major_declines(master_df):
     grand_total += total_declines
 
   major_df = pd.DataFrame(rc_totals)
-  major_df = major_df.sort_values(
-      by="Declined transactions", ascending=False
-  ).reset_index(drop=True)
+  major_df = major_df.sort_values(by="Declined transactions", ascending=False).reset_index(drop=True)
 
   major_df["Share of ATM declines"] = major_df["Declined transactions"].apply(
       lambda x: (x / grand_total) * 100 if grand_total > 0 else 0.0
   )
 
-  major_df["Declined transactions formatted"] = (
-      major_df["Declined transactions"].astype(int).map("{:,}".format)
-  )
-  major_df["Share formatted"] = major_df["Share of ATM declines"].map(
-      lambda x: f"{x:.2f}%"
-  )
+  major_df["Declined transactions formatted"] = major_df["Declined transactions"].astype(int).map("{:,}".format)
+  major_df["Share formatted"] = major_df["Share of ATM declines"].map(lambda x: f"{x:.2f}%")
 
   return major_df
 
-
 # 11. Core Execution Logic
 if not filtered_files:
-  st.info(
-      "👈 Please upload your **daily report files** above to aggregate and generate reports."
-  )
+  st.info("👈 Please upload your **daily report files** above to aggregate and generate reports.")
 else:
   try:
     if selected_report == "Home / Overview":
       st.subheader("Welcome to the Central Dashboard")
-      st.success(
-          f"Successfully processed and aligned **{len(filtered_files)} daily report files** line-by-line."
-      )
-      st.write(
-          "Select a report from the menu above to view detailed monthly analytics."
-      )
+      st.success(f"Successfully processed and aligned **{len(filtered_files)} daily report files** line-by-line.")
+      st.write("Select a report from the menu above to view detailed monthly analytics.")
 
     elif selected_report == "1. ATM decline summery":
       master_df = process_strict_daily_matrix(tuple(filtered_files))
@@ -591,9 +472,7 @@ else:
     elif selected_report == "2. ATM Transaction Success Rate Summary":
       success_df = process_success_rate_matrix(tuple(filtered_files))
       st.subheader("2. ATM Transaction Success Rate Summary")
-      st.write(
-          "Day-to-day issuer success rates (%) by bank extracted directly from daily files. Values strictly below **78%** are highlighted in red."
-      )
+      st.write("Day-to-day issuer success rates (%) by bank extracted directly from daily files. Values strictly below **78%** are highlighted in red.")
 
       html_table = "<div style='max-height: 600px; overflow-y: auto; overflow-x: auto;'><table style='width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px; text-align: center;'>"
       html_table += "<thead><tr style='background-color: #f2f2f2;'>"
@@ -617,4 +496,83 @@ else:
               if num_val < 78.0:
                 html_table += f"<td style='border: 1px solid #ddd; padding: 6px; color: red; font-weight: bold;'>{formatted_val}</td>"
               else:
-                html_table += f"<td style='border: 1
+                html_table += f"<td style='border: 1px solid #ddd; padding: 6px;'>{formatted_val}</td>"
+            except (ValueError, TypeError):
+              html_table += "<td style='border: 1px solid #ddd; padding: 6px;'>100.0%</td>"
+
+        html_table += "</tr>"
+
+      html_table += "</tbody></table></div>"
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+      csv_export = success_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Success Rate Summary Report (CSV)",
+          data=csv_export,
+          file_name="atm_success_rate_summary.csv",
+          mime="text/csv",
+      )
+
+    elif selected_report == "3. ATM success rate ranking":
+      success_df = process_success_rate_matrix(tuple(filtered_files))
+      ranking_df = process_success_rate_ranking(success_df)
+
+      st.subheader("3. ATM Success Rate Ranking")
+      st.write("Participant ranking based on monthly average success rates evaluated against the **98.5%** target threshold.")
+
+      html_table = "<div style='max-height: 600px; overflow-y: auto; overflow-x: auto;'><table style='width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px; text-align: center;'>"
+      html_table += "<thead><tr style='background-color: #f2f2f2;'>"
+      html_table += "<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>Rank</th>"
+      html_table += "<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>Participant</th>"
+      html_table += "<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>Success rate</th>"
+      html_table += "<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>Target status</th>"
+      html_table += "</tr></thead><tbody>"
+
+      for idx, row in ranking_df.iterrows():
+        is_below = row["Target status"] == "Below target"
+        status_color = "color: red; font-weight: bold;" if is_below else ""
+        html_table += f"<tr><td style='border: 1px solid #ddd; padding: 6px; font-weight: bold;'>{row['Rank']}</td><td style='border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold;'>{row['Participant']}</td><td style='border: 1px solid #ddd; padding: 6px;'>{row['Success rate formatted']}</td><td style='border: 1px solid #ddd; padding: 6px; {status_color}'>{row['Target status']}</td></tr>"
+
+      html_table += "</tbody></table></div>"
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+      export_df = ranking_df[["Rank", "Participant", "Success rate formatted", "Target status"]].copy()
+      export_df.rename(columns={"Success rate formatted": "Success rate"}, inplace=True)
+      csv_export = export_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Success Rate Ranking Report (CSV)",
+          data=csv_export,
+          file_name="atm_success_rate_ranking.csv",
+          mime="text/csv",
+      )
+
+    elif selected_report == "4. ATM decline contribution by participant":
+      master_df = process_strict_daily_matrix(tuple(filtered_files))
+      contrib_df = process_decline_contribution(master_df)
+
+      st.subheader("4. ATM Decline Contribution by Participant")
+      st.write("Participant contribution share of total ATM declined transactions computed from the monthly aggregated decline matrix.")
+
+      html_table = "<div style='max-height: 600px; overflow-y: auto; overflow-x: auto;'><table style='width: 100%; border-collapse: collapse; font-family: sans-serif; font-size: 13px; text-align: center;'>"
+      html_table += "<thead><tr style='background-color: #f2f2f2;'>"
+      html_table += "<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>Participant</th>"
+      html_table += "<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>Declined transactions</th>"
+      html_table += "<th style='border: 1px solid #ddd; padding: 8px; position: sticky; top: 0; background-color: #f2f2f2; z-index: 1;'>Share of ATM declines</th>"
+      html_table += "</tr></thead><tbody>"
+
+      for idx, row in contrib_df.iterrows():
+        html_table += f"<tr><td style='border: 1px solid #ddd; padding: 6px; text-align: left; font-weight: bold;'>{row['Participant']}</td><td style='border: 1px solid #ddd; padding: 6px;'>{row['Declined transactions formatted']}</td><td style='border: 1px solid #ddd; padding: 6px;'>{row['Share formatted']}</td></tr>"
+
+      html_table += "</tbody></table></div>"
+      st.markdown(html_table, unsafe_allow_html=True)
+
+      st.markdown("<br>", unsafe_allow_html=True)
+      export_df = contrib_df[["Participant", "Declined transactions", "Share formatted"]].copy()
+      export_df.rename(columns={"Share formatted": "Share of ATM declines"}, inplace=True)
+      csv_export = export_df.to_csv(index=False).encode("utf-8")
+      st.download_button(
+          label="Download Decline Contribution Report (CSV)",
+          data=csv_export,
+          file_name="atm_decline_
