@@ -224,7 +224,7 @@ def process_strict_daily_matrix(file_tuples_names):
   final_df = pd.concat([final_df, total_row], ignore_index=True)
   return final_df
 
-# 5. Success Rate Processing Function (Report 2) - Highly Robust Extraction
+# 5. Success Rate Processing Function (Report 2) - Bulletproof Data-Density Fallback
 @st.cache_data
 def process_success_rate_matrix(file_tuples_names):
   daily_success_records = []
@@ -237,19 +237,32 @@ def process_success_rate_matrix(file_tuples_names):
     success_row = None
     weighted_avg_from_file = None
 
+    # Step 1: Keyword search
     for r_idx, row in df_raw.iterrows():
       row_str = " ".join([str(val) for val in row.values]).upper()
       if any(k in row_str for k in ["ISSU", "SUCC", "RATE", "PERCENT"]):
         success_row = row
         break
 
-    if success_row is None and len(df_raw) > 5:
-      for r_idx in range(len(df_raw) - 1, max(0, len(df_raw) - 10), -1):
-        row = df_raw.iloc[r_idx]
-        row_str = " ".join([str(val) for val in row.values]).upper()
-        if "%" in row_str or "RATE" in row_str:
-          success_row = row
-          break
+    # Step 2: Smart Data-Density Fallback (Finds row with most valid success rates if text match fails)
+    if success_row is None and len(df_raw) > 3:
+      best_row = None
+      max_valid_count = 0
+      for r_idx, row in df_raw.iterrows():
+        valid_count = 0
+        for val in row.values:
+          try:
+            val_str = str(val).replace("%", "").strip()
+            num = float(val_str)
+            if 0 <= num <= 100:
+              valid_count += 1
+          except:
+            pass
+        if valid_count > max_valid_count:
+          max_valid_count = valid_count
+          best_row = row
+      if max_valid_count >= 3:
+        success_row = best_row
 
     bank_success_rates = {"Bank/Date": date_label}
 
