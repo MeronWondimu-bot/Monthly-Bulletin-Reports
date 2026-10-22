@@ -234,7 +234,6 @@ def process_success_rate_matrix(file_tuples_names):
     success_row = None
     weighted_avg_from_file = None
 
-    # Locate row containing "ISSU" and "SUCC" (covers "Issu. SUCC. RATE (%)")
     for r_idx, row in df_raw.iterrows():
       row_str = " ".join([str(val) for val in row.values]).upper()
       if "ISSU" in row_str and "SUCC" in row_str:
@@ -266,14 +265,4 @@ def process_success_rate_matrix(file_tuples_names):
           c_str = str(col_name).upper()
           if any(term in c_str for term in ["WEIGHTED", "W.AVG", "TOTAL", "AVERAGE"]):
             w_val = success_row.iloc[col_idx]
-            try:
-              w_str = str(w_val).replace("%", "").strip()
-              val_num = float(w_str)
-              if val_num <= 1.0 and val_num > 0:
-                val_num *= 100
-              weighted_avg_from_file = round(val_num, 1)
-              break
-            except:
-              pass
-
-        if weighted_avg_from_file is None:
+            try
