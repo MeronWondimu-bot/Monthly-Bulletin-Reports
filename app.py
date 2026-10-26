@@ -230,7 +230,6 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
     for file in uploaded_files:
       try:
         xls = pd.ExcelFile(file)
-        # Format date as requested: e.g. Oct 1,2026
         file_date = (
             file.name.split(".")[0]
             .replace("ATM Declined Transaction Report for", "")
@@ -308,34 +307,41 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
           [df_success, pd.DataFrame([avg_dict])], ignore_index=True
       )
 
-
-      # Color-coding rules:
-      # 98.5% - 100% -> Green
-      # 90% - 98% -> Yellow
-      # 80% - 89% -> Light Yellow
-      # <=79% -> Red
-      def apply_success_styling(val):
-        try:
-          num = float(val)
-          if pd.isna(num):
-            return ""
-          pct_str = f"{num*100:.1f}%"
-
-          if num >= 0.985:
-            return f"<span style='background-color: #2ecc71; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-          elif num >= 0.90:
-            return f"<span style='background-color: #f1c40f; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-          elif num >= 0.80:
-            return f"<span style='background-color: #fcf3cf; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-          else:
-            return f"<span style='background-color: #e74c3c; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-        except:
-          return str(val)
-
-
       display_df = df_success.copy()
-      for col in bank_cols:
-        display_df[col] = display_df[col].apply(apply_success_styling)
+      for idx, row in df_success.iterrows():
+        is_avg = str(row["Bank/Date"]).strip().lower() == "average"
+        for col in bank_cols:
+          val = row[col]
+          try:
+            num = float(val)
+            if pd.isna(num):
+              display_df.at[idx, col] = ""
+              continue
+            pct_str = f"{num*100:.1f}%"
+
+            if is_avg:
+              # Apply color coding ONLY to the Average row at the bottom
+              if num >= 0.985:
+                display_df.at[
+                    idx, col
+                ] = f"<span style='background-color: #2ecc71; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
+              elif num >= 0.90:
+                display_df.at[
+                    idx, col
+                ] = f"<span style='background-color: #f1c40f; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
+              elif num >= 0.80:
+                display_df.at[
+                    idx, col
+                ] = f"<span style='background-color: #fcf3cf; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
+              else:
+                display_df.at[
+                    idx, col
+                ] = f"<span style='background-color: #e74c3c; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
+            else:
+              # Regular daily rows display as plain percentage without background color
+              display_df.at[idx, col] = pct_str
+          except:
+            pass
 
       st.markdown(
           display_df.to_html(escape=False, index=False), unsafe_allow_html=True
