@@ -83,7 +83,6 @@ HEADER_MAPPING = {
     "AHADU": "Ahadu",
     "DGB": "Global",
     "OB": "Oromia",
-    "WEIGHTED AVERAGE": "Weighted Average",
 }
 
 
@@ -271,7 +270,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
 
             record = {"Bank/Date": file_date}
             for c, val in zip(cols, vals):
-              c_str = str(c).strip().upper()
+              c_str = str(c).strip().upper().replace("\n", " ")
               if c_str in HEADER_MAPPING:
                 b_name = HEADER_MAPPING[c_str]
                 try:
@@ -279,6 +278,12 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
                   record[b_name] = num
                 except:
                   record[b_name] = None
+              elif "WEIGHT" in c_str or "AVERAGE" in c_str:
+                try:
+                  num = float(str(val).replace("%", "").strip())
+                  record["Weighted Average"] = num
+                except:
+                  pass
 
             if len(record) > 1:
               success_rows.append(record)
@@ -362,126 +367,4 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       st.download_button(
           "📥 Download Success Rate Summary (.xlsx)",
           out_succ.getvalue(),
-          "ATM_Success_Rate_Summary.xlsx",
-          key="dl_success_sum",
-      )
-    else:
-      st.warning(
-          "Could not locate 'SUCC. RATE' rows in the uploaded files. Please"
-          " check file structure."
-      )
-  else:
-    st.info("👆 Please upload your daily source report files at the top.")
-
-# ==========================================
-# 3. ATM SUCCESS RATE RANKING
-# ==========================================
-elif report_type == "3. ATM Success Rate Ranking":
-  st.subheader("🏆 ATM Success Rate Ranking")
-  st.info("Report 3 is ready for review once Report 2 is locked down.")
-
-# ==========================================
-# 4. ATM DECLINE CONTRIBUTION BY PARTICIPANT
-# ==========================================
-elif report_type == "4. ATM decline contribution by participant":
-  st.subheader("👤 ATM Decline Contribution by Participant")
-  if combined_decline is not None:
-    bank_totals = {}
-    for col in combined_decline.columns:
-      col_clean = str(col).strip().upper()
-      if "gedaa" in col_clean.lower() or "gadaa" in col_clean.lower():
-        continue
-      if col_clean in HEADER_MAPPING:
-        target_name = HEADER_MAPPING[col_clean]
-        vals = pd.to_numeric(combined_decline[col], errors="coerce").fillna(0)
-        bank_totals[target_name] = bank_totals.get(target_name, 0) + vals.sum()
-
-    part_df = pd.DataFrame(
-        list(bank_totals.items()),
-        columns=["Participant", "Declined transactions"],
-    )
-    part_df = part_df.sort_values(
-        by="Declined transactions", ascending=False
-    ).reset_index(drop=True)
-
-    total_declines = part_df["Declined transactions"].sum()
-    part_df["Share of ATM declines"] = (
-        part_df["Declined transactions"] / total_declines
-        if total_declines > 0
-        else 0
-    )
-
-    display_part = part_df.copy()
-    display_part["Declined transactions"] = display_part[
-        "Declined transactions"
-    ].apply(lambda x: f"{int(x):,}")
-    display_part["Share of ATM declines"] = display_part[
-        "Share of ATM declines"
-    ].apply(lambda x: f"{x:.2%}")
-
-    st.dataframe(display_part, use_container_width=True)
-  else:
-    st.info("👆 Please upload your daily decline Excel files at the top.")
-
-# ==========================================
-# 5. MAJOR ATM DECLINED TRANSACTIONS
-# ==========================================
-elif report_type == "5. Major ATM declined transactions":
-  st.subheader("🔍 Major ATM Declined Transactions")
-  if combined_decline is not None:
-    rc_col = combined_decline.columns[0]
-    combined_decline[rc_col] = (
-        pd.to_numeric(combined_decline[rc_col], errors="coerce")
-        .fillna(0)
-        .astype(int)
-        .astype(str)
-    )
-
-    total_col = [
-        c for c in combined_decline.columns if "total" in str(c).lower()
-    ]
-    if total_col:
-      combined_decline["Total_Numeric"] = pd.to_numeric(
-          combined_decline[total_col[0]], errors="coerce"
-      ).fillna(0)
-    else:
-      bank_cols = [
-          c
-          for c in combined_decline.columns
-          if c != rc_col
-          and "gedaa" not in str(c).lower()
-          and "gadaa" not in str(c).lower()
-      ]
-      combined_decline["Total_Numeric"] = (
-          combined_decline[bank_cols]
-          .apply(pd.to_numeric, errors="coerce")
-          .fillna(0)
-          .sum(axis=1)
-      )
-
-    rc_summary = (
-        combined_decline.groupby(rc_col)["Total_Numeric"].sum().reset_index()
-    )
-    rc_summary.columns = ["Response code", "Declined transactions"]
-    rc_summary = rc_summary.sort_values(
-        by="Declined transactions", ascending=False
-    ).reset_index(drop=True)
-
-    total_declines_rc = rc_summary["Declined transactions"].sum()
-    rc_summary["Share of ATM declines"] = (
-        rc_summary["Declined transactions"] / total_declines_rc
-        if total_declines_rc > 0
-        else 0
-    )
-
-    display_rc = rc_summary.copy()
-    display_rc["Declined transactions"] = display_rc[
-        "Declined transactions"
-    ].apply(lambda x: f"{int(x):,}")
-    display_rc["Share of ATM declines"] = display_rc[
-        "Share of ATM declines"
-    ].apply(lambda x: f"{x:.2%}")
-
-    st.dataframe(display_rc, use_container_width=True)
-  else:
-    st.info("👆 Please upload your daily decline Excel files at the top.")
+          "ATM_Success_Rate_Summary.xlsx
