@@ -1,303 +1,397 @@
-import streamlit as st
+import io
 import pandas as pd
-import re
+import streamlit as st
 
-# 1. Page Configuration
+# Page Configuration
 st.set_page_config(
-    page_title="EthSwitch Performance Reporting Hub",
-    page_icon="🏢",
+    page_title="EthSwitch Performance Reporting Dashboard",
+    page_icon="💳",
     layout="wide",
 )
 
-# 2. Custom Top Header with Branding Logos
-col1, col2, col3 = st.columns([1, 3, 1])
+# Custom CSS for UI styling
+st.markdown("""
+    <style>
+        .main-header {
+            font-size: 26px;
+            font-weight: bold;
+            color: #d35400;
+            text-align: center;
+            margin-bottom: 0px;
+        }
+        .sub-header {
+            font-size: 14px;
+            color: #7f8c8d;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .banner {
+            background-color: #fdf2e9;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 5px solid #d35400;
+            text-align: center;
+            font-weight: bold;
+            color: #d35400;
+            font-size: 20px;
+            margin-bottom: 25px;
+        }
+    </style>
+""", unsafe_allow_html=True)
 
-with col1:
-  st.markdown("## 🏢 **ETHSWITCH**")
+# Top Header / Logos Section
+col_logo1, col_title, col_logo2 = st.columns([1, 3, 1])
+with col_logo1:
+  st.markdown("### 🏢 ETHSWITCH")
+with col_title:
+  st.markdown(
+      '<div class="main-header">EthSwitch Performance Reporting Hub</div>',
+      unsafe_allow_html=True,
+  )
+  st.markdown(
+      '<div class="sub-header">Automated Bi-weekly & Monthly Report'
+      " Generator</div>",
+      unsafe_allow_html=True,
+  )
+with col_logo2:
+  st.markdown("### 🐦 EthioPay")
 
-with col2:
-  st.markdown("<h1 style='text-align: center; color: #E65100; font-weight: bold; margin-bottom: 0;'>EthSwitch Performance Reporting Hub</h1>", unsafe_allow_html=True)
-  st.markdown("<p style='text-align: center; color: #666666; margin-top: 0;'>Automated Bi-weekly & Monthly Report Generator</p>", unsafe_allow_html=True)
-
-with col3:
-  st.markdown("<h2 style='text-align: right;'>🦜 <span style='color:#C2185B;'>EthioPay</span></h2>", unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
-
-# 3. Orange Highlight Banner
 st.markdown(
-    """
-    <div style="background-color: #E65100; border-left: 6px solid #B7410E; padding: 12px; border-radius: 4px; text-align: center;">
-        <h3 style="color: #000000; margin: 0; font-size: 18px; font-weight: bold; letter-spacing: 1px;">
-            BI-WEEKLY & MONTHLY REPORT GENERATOR
-        </h3>
-    </div>
-    """,
+    '<div class="banner">BI-WEEKLY & MONTHLY REPORT GENERATOR</div>',
     unsafe_allow_html=True,
 )
 
-st.markdown("<br>", unsafe_allow_html=True)
+# ----------------------------------------------------
+# REPORT CATEGORY SELECTOR
+# ----------------------------------------------------
+st.markdown("**REPORT CATEGORY**")
+category = st.radio(
+    "Category",
+    ["Standard Reports", "MEA / Merged Reports (Temporary)"],
+    label_visibility="collapsed",
+    horizontal=True,
+)
 
-STANDARD_BANKS = [
-    "CBE", "BOA", "ABAY", "DASHEN", "WEGAGEN", "ZEMEN", "BUNNA", "ENAT",
-    "DGB", "LION", "OIB", "BRIB", "UB", "AIB", "CBO", "NIB", "ADIB",
-    "ZAMZAM", "HIJRA", "AHADU", "SINQEE", "AMHARA", "Tseday"
-]
+st.markdown("---")
 
-BANK_ALIASES = {
-    "CBE": ["CBE", "COMMERCIAL BANK OF ETHIOPIA", "COMMERCIAL", "COMM"],
-    "BOA": ["BOA", "BANK OF ABYSSINIA", "ABYSSINIA"],
-    "ABAY": ["ABAY", "ABAY BANK"],
-    "DASHEN": ["DASHEN", "DASHEN BANK"],
-    "WEGAGEN": ["WEGAGEN", "WEGAGEN BANK", "WGB"],
-    "ZEMEN": ["ZEMEN", "ZEMEN BANK"],
-    "BUNNA": ["BUNNA", "BUNNA BANK"],
-    "ENAT": ["ENAT", "ENAT BANK"],
-    "DGB": ["DGB", "DEVELOPMENT BANK OF ETHIOPIA", "DBE"],
-    "LION": ["LION", "LION INTERNATIONAL BANK", "LIB"],
-    "OIB": ["OIB", "OROMIA INTERNATIONAL BANK", "OROMIA BANK"],
-    "BRIB": ["BRIB", "BERHAN", "BERHAN BANK"],
-    "UB": ["UB", "UNITED BANK", "COOP UB", "UNITED"],
-    "AIB": ["AIB", "AWASH", "AWASH BANK", "AWASH INTERNATIONAL BANK"],
-    "CBO": ["CBO", "COOPERATIVE BANK OF OROMIA"],
-    "NIB": ["NIB", "NIB INTERNATIONAL BANK", "NIB BANK"],
-    "ADIB": ["ADIB", "ADDIS INTERNATIONAL BANK", "ADIS BANK", "ADDIS BANK"],
-    "ZAMZAM": ["ZAMZAM", "ZAMZAM BANK"],
-    "HIJRA": ["HIJRA", "HIJRA BANK"],
-    "AHADU": ["AHADU", "AHADU BANK"],
-    "SINQEE": ["SINQEE", "SINQEE BANK"],
-    "AMHARA": ["AMHARA", "AMHARA BANK"],
-    "Tseday": ["TSEDAY", "TSEDAY BANK", "TSEDAY BANK S.C."]
+# ----------------------------------------------------
+# REPORT SELECTOR (Horizontal Navigation)
+# ----------------------------------------------------
+if category == "Standard Reports":
+  st.markdown("**REPORT**")
+  report_type = st.radio(
+      "Report Type",
+      [
+          "Home / Overview",
+          "1. Decline trasnactions summery",
+          "2. Success Rate Ranking & Summary",
+      ],
+      label_visibility="collapsed",
+      horizontal=True,
+  )
+else:
+  st.info(
+      "MEA / Merged Reports category is currently empty or under development."
+  )
+  report_type = "Home / Overview"
+
+st.markdown("---")
+
+# Header Mapping for Clean Bank Names
+HEADER_MAPPING = {
+    "CBE": "CBE",
+    "BOA": "BOA",
+    "AIB": "Awash",
+    "SINQEE": "Siinqee",
+    "OIB": "Oromia",
+    "DASHEN": "Dashen",
+    "CBO": "CBO",
+    "AMHARA": "Amhara",
+    "ABAY": "Abay",
+    "BRIB": "Berhan",
+    "WEGAGEN": "Wegagen",
+    "WGB": "Wegagen",
+    "UB": "Hibret",
+    "NIB": "NIB",
+    "Tseday": "Tseday",
+    "ZEMEN": "Zemen",
+    "BUNNA": "Bunna",
+    "ZAMZAM": "ZamZam",
+    "ADIB": "Addis",
+    "HIJRA": "Hijra",
+    "LION": "Lion",
+    "ENAT": "Enat",
+    "AHADU": "Ahadu",
+    "DGB": "Global",
+    "OB": "Oromia",
 }
 
-def standardize_bank_name(col_name):
-  cleaned = str(col_name).strip().upper()
-  if "GADAA" in cleaned:
-    return None
-  for std_code, aliases in BANK_ALIASES.items():
-    if cleaned == std_code or cleaned in aliases:
-      return std_code
-    for alias in aliases:
-      if alias in cleaned:
-        return std_code
-  return cleaned
 
-def extract_date_label(filename, index):
-  m = re.search(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-_]*(\d{1,2})", filename, re.IGNORECASE)
-  if m:
-    return f"{int(m.group(2))}-{m.group(1)[:3].capitalize()}"
-  m2 = re.search(r"(\d{1,2})[\s\-_]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*", filename, re.IGNORECASE)
-  if m2:
-    return f"{int(m2.group(1))}-{m2.group(2)[:3].capitalize()}"
-  return f"{index}-Sep"
+# Helper function to parse multi-sheet decline workbooks
+def process_decline_file(file):
+  xls = pd.ExcelFile(file)
+  daily_frames = []
 
-def extract_datetime_from_file(file):
-  filename = getattr(file, "name", "")
-  m = re.search(r"(\d{1,2})[\s\-_]*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s\-_]*(\d{4})?", filename, re.IGNORECASE)
-  if m:
-    day, mon, yr = m.group(1), m.group(2), m.group(3)
-    year_str = yr if yr else "2026"
-    try:
-      return pd.to_datetime(f"{day} {mon} {year_str}")
-    except:
-      pass
+  for sheet_name in xls.sheet_names:
+    if "sheet16" in sheet_name.lower() or "summary" in sheet_name.lower():
+      continue
+
+    df_sheet = pd.read_excel(file, sheet_name=sheet_name)
+
+    header_idx = None
+    for idx, row in df_sheet.iterrows():
+      row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
+      if "RC/BANK NAME" in row_str or "RC" in row_str:
+        header_idx = idx
+        break
+
+    if header_idx is not None:
+      df_sheet.columns = [
+          str(c).strip() for c in df_sheet.iloc[header_idx].values
+      ]
+      sub_df = df_sheet.iloc[header_idx + 1 :].copy()
+      rc_col = sub_df.columns[0]
+      sub_df = sub_df.dropna(subset=[rc_col])
+      sub_df = sub_df[
+          ~sub_df[rc_col]
+          .astype(str)
+          .str.contains("Total|RC", case=False, na=False)
+      ]
+      daily_frames.append(sub_df)
+
+  if daily_frames:
+    return pd.concat(daily_frames, ignore_index=True)
   return None
 
-# 9. Multi-File Uploader Section with Safe Defaulting
-st.markdown("### 📁 **Upload Daily Source Reports**")
-uploaded_files = st.file_uploader("Upload all daily ATM decline report files for the month", type=["xlsx", "xls"], accept_multiple_files=True)
 
-filtered_files = []
-if uploaded_files:
-  file_dates = []
-  file_map = {}
-  for idx, f in enumerate(uploaded_files):
-    dt = extract_datetime_from_file(f)
-    if dt is not None:
-      file_dates.append(dt)
-      file_map[dt] = f
-    else:
-      fallback_dt = pd.to_datetime(f"2026-09-{idx+1:02d}")
-      file_dates.append(fallback_dt)
-      file_map[fallback_dt] = f
+# ==========================================
+# HOME / OVERVIEW
+# ==========================================
+if report_type == "Home / Overview":
+  st.subheader("Welcome to the Central Dashboard")
+  st.markdown("""
+    Use the horizontal navigation above to select your report category and specific report type:
+    
+    * **1. Decline trasnactions summery:** Consolidates daily sheets to display participant contributions and major cause response codes.
+    * **2. Success Rate Ranking & Summary:** Automatically evaluates participating banks against the **98.5% target threshold** and generates ranking tables.
+    """)
 
-  filtered_files = uploaded_files
+# ==========================================
+# 1. DECLINE TRANSACTIONS SUMMARY
+# ==========================================
+elif report_type == "1. Decline trasnactions summery":
+  st.subheader("📊 ATM Decline Transactions Summary")
 
-  if file_dates:
-    min_dt = min(file_dates)
-    max_dt = max(file_dates)
+  decline_file = st.file_uploader(
+      "Upload ATM Decline Workbook (.xlsx / .xls)",
+      type=["xlsx", "xls"],
+      key="decline_summary",
+  )
 
-    st.markdown("---")
-    st.subheader("📅 **File Date Verification & Filtering**")
-    date_filter_option = st.radio("Filter source reports by date?", ["All Uploaded Files", "Custom Date Range"], horizontal=True)
+  if decline_file is not None:
+    combined_decline = process_decline_file(decline_file)
 
-    if date_filter_option == "Custom Date Range":
-      selected_range = st.date_input("Select Report Date Range", value=(min_dt.date(), max_dt.date()), min_value=min_dt.date(), max_value=max_dt.date())
-      if isinstance(selected_range, tuple) and len(selected_range) == 2:
-        start_d, end_d = selected_range
-        filtered_files = [file_map[dt] for dt in file_dates if start_d <= dt.date() <= end_d]
+    if combined_decline is not None:
+      tab1, tab2 = st.tabs(
+          ["👤 Participant Contribution", "🔍 Major Causes (Response Codes)"]
+      )
 
-st.markdown("---")
+      with tab1:
+        st.markdown("#### Decline Contribution by Participant")
+        bank_totals = {}
+        for col in combined_decline.columns:
+          col_clean = str(col).strip().upper()
+          if col_clean in HEADER_MAPPING:
+            target_name = HEADER_MAPPING[col_clean]
+            vals = pd.to_numeric(
+                combined_decline[col], errors="coerce"
+            ).fillna(0)
+            bank_totals[target_name] = (
+                bank_totals.get(target_name, 0) + vals.sum()
+            )
 
-# 10. Report Selection
-st.markdown("### **Report Type**")
-report_options = [
-    "Home / Overview",
-    "1. ATM decline summery",
-    "2. ATM Transaction Success Rate Summary",
-    "3. ATM success rate ranking",
-    "4. ATM decline contribution by participant",
-    "5. Major ATM declined transactions"
-]
-selected_report = st.radio("Select Report Type", report_options, horizontal=False, label_visibility="collapsed")
-st.markdown("---")
+        part_df = pd.DataFrame(
+            list(bank_totals.items()),
+            columns=["Participant", "Declined transactions"],
+        )
+        part_df = part_df.sort_values(
+            by="Declined transactions", ascending=False
+        ).reset_index(drop=True)
 
-# 4. Strict Line-by-Line Aggregation Function (Report 1) - GADAA Excluded
-@st.cache_data
-def process_strict_daily_matrix(file_tuples_names):
-  daily_matrices = []
-  all_rcs_set = set()
+        total_declines = part_df["Declined transactions"].sum()
+        part_df["Share of ATM declines"] = (
+            part_df["Declined transactions"] / total_declines
+            if total_declines > 0
+            else 0
+        )
 
-  for file in file_tuples_names:
-    df_raw = pd.read_excel(file, header=None)
-    header_row_idx = None
-    for idx, row in df_raw.iterrows():
-      row_str = " ".join([str(val) for val in row.values]).upper()
-      if "RC" in row_str and "BANK" in row_str:
-        header_row_idx = idx
-        break
+        display_part = part_df.copy()
+        display_part["Declined transactions"] = display_part[
+            "Declined transactions"
+        ].apply(lambda x: f"{int(x):,}")
+        display_part["Share of ATM declines"] = display_part[
+            "Share of ATM declines"
+        ].apply(lambda x: f"{x:.2%}")
 
-    if header_row_idx is not None:
-      df_day = pd.read_excel(file, header=header_row_idx)
-      new_cols = []
-      for i, c in enumerate(df_day.columns):
-        if i == 0:
-          new_cols.append(str(c).strip())
+        st.dataframe(display_part, use_container_width=True)
+
+        out_part = io.BytesIO()
+        with pd.ExcelWriter(out_part, engine="openpyxl") as writer:
+          part_df.to_excel(
+              writer, sheet_name="Participant Contribution", index=False
+          )
+        st.download_button(
+            "📥 Download Participant Contribution Report (.xlsx)",
+            out_part.getvalue(),
+            "Decline_Contribution_By_Participant.xlsx",
+            key="dl_part",
+        )
+
+      with tab2:
+        st.markdown("#### Major Causes of ATM Declines (Response Codes)")
+        rc_col = combined_decline.columns[0]
+        combined_decline[rc_col] = (
+            pd.to_numeric(combined_decline[rc_col], errors="coerce")
+            .fillna(0)
+            .astype(int)
+            .astype(str)
+        )
+
+        total_col = [
+            c for c in combined_decline.columns if "total" in str(c).lower()
+        ]
+        if total_col:
+          combined_decline["Total_Numeric"] = pd.to_numeric(
+              combined_decline[total_col[0]], errors="coerce"
+          ).fillna(0)
         else:
-          std = standardize_bank_name(c)
-          if std == "GADAA" or "GADAA" in str(c).upper():
-            new_cols.append(None)
-          else:
-            new_cols.append(std if std in STANDARD_BANKS else None)
-      df_day.columns = new_cols
+          bank_cols = combined_decline.columns[1:-1]
+          combined_decline["Total_Numeric"] = (
+              combined_decline[bank_cols]
+              .apply(pd.to_numeric, errors="coerce")
+              .fillna(0)
+              .sum(axis=1)
+          )
 
-      df_day = df_day.loc[:, df_day.columns.notna()]
-      rc_col = df_day.columns[0]
-      df_day = df_day.dropna(subset=[rc_col])
-      df_day = df_day[~df_day[rc_col].astype(str).str.upper().str.contains("GADAA", na=False)]
-      
-      df_day = df_day[df_day[rc_col].astype(str).str.replace(".", "", regex=False).str.isdigit()].copy()
-      df_day[rc_col] = df_day[rc_col].astype(str).str.strip()
-      df_day = df_day.drop_duplicates(subset=[rc_col], keep="first")
+        rc_summary = (
+            combined_decline.groupby(rc_col)["Total_Numeric"]
+            .sum()
+            .reset_index()
+        )
+        rc_summary.columns = ["Response code", "Declined transactions"]
+        rc_summary = rc_summary.sort_values(
+            by="Declined transactions", ascending=False
+        ).reset_index(drop=True)
 
-      for bank in STANDARD_BANKS:
-        if bank not in df_day.columns:
-          df_day[bank] = 0
+        total_declines_rc = rc_summary["Declined transactions"].sum()
+        rc_summary["Share of ATM declines"] = (
+            rc_summary["Declined transactions"] / total_declines_rc
+            if total_declines_rc > 0
+            else 0
+        )
 
-      df_day.set_index(rc_col, inplace=True)
-      df_numeric = df_day[STANDARD_BANKS].apply(pd.to_numeric, errors="coerce").fillna(0)
+        display_rc = rc_summary.copy()
+        display_rc["Declined transactions"] = display_rc[
+            "Declined transactions"
+        ].apply(lambda x: f"{int(x):,}")
+        display_rc["Share of ATM declines"] = display_rc[
+            "Share of ATM declines"
+        ].apply(lambda x: f"{x:.2%}")
 
-      all_rcs_set.update(df_numeric.index)
-      daily_matrices.append(df_numeric)
+        st.dataframe(display_rc, use_container_width=True)
 
-  if not daily_matrices:
-    return None
+        out_rc = io.BytesIO()
+        with pd.ExcelWriter(out_rc, engine="openpyxl") as writer:
+          rc_summary.to_excel(writer, sheet_name="Major Causes", index=False)
+        st.download_button(
+            "📥 Download Major Causes Report (.xlsx)",
+            out_rc.getvalue(),
+            "Major_Causes_Of_Declines.xlsx",
+            key="dl_rc",
+        )
 
-  sorted_rcs = sorted(list(all_rcs_set), key=lambda x: int(x) if x.isdigit() else 0)
-  master_grid = pd.DataFrame(0.0, index=sorted_rcs, columns=STANDARD_BANKS)
+# ==========================================
+# 2. SUCCESS RATE RANKING & SUMMARY
+# ==========================================
+elif report_type == "2. Success Rate Ranking & Summary":
+  st.subheader("🏆 ATM Success Rate Ranking & Target Evaluation")
 
-  for mat in daily_matrices:
-    aligned_mat = mat.reindex(index=sorted_rcs, columns=STANDARD_BANKS, fill_value=0)
-    master_grid = master_grid.add(aligned_mat, fill_value=0)
+  target_pct = (
+      st.slider(
+          "Target Success Rate Threshold (%)",
+          min_value=90.0,
+          max_value=100.0,
+          value=98.5,
+          step=0.1,
+      )
+      / 100.0
+  )
 
-  final_df = master_grid.reset_index()
-  final_df.rename(columns={final_df.columns[0]: "RC/BANK NAME"}, inplace=True)
-  final_df[STANDARD_BANKS] = final_df[STANDARD_BANKS].astype(int)
-  
-  final_df["Total"] = final_df[STANDARD_BANKS].sum(axis=1)
+  success_file = st.file_uploader(
+      "Upload ATM Success Rate Report (.xlsx / .xls)",
+      type=["xlsx", "xls"],
+      key="ranking_file",
+  )
 
-  total_row = final_df[STANDARD_BANKS].sum(numeric_only=True).to_frame().T
-  total_row["RC/BANK NAME"] = "TOTAL"
-  total_row["Total"] = total_row[STANDARD_BANKS].sum(axis=1)
-  total_row[STANDARD_BANKS] = total_row[STANDARD_BANKS].astype(int)
-  total_row["Total"] = total_row["Total"].astype(int)
+  if success_file is not None:
+    df_success = pd.read_excel(success_file, sheet_name=0)
 
-  final_df = pd.concat([final_df, total_row], ignore_index=True)
-  return final_df
+    header_idx, avg_idx = None, None
+    for idx, row in df_success.iterrows():
+      row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
+      if "Bank/Date" in row_str or "Bank" in row_str:
+        header_idx = idx
+      if "Average" in row_str:
+        avg_idx = idx
 
-# 5. Success Rate Processing Function (Report 2) - Fully Resilient Header & Row Search
-@st.cache_data
-def process_success_rate_matrix(file_tuples_names):
-  daily_success_records = []
+    if header_idx is not None and avg_idx is not None:
+      cols = df_success.iloc[header_idx].tolist()
+      avg_row = df_success.iloc[avg_idx].tolist()
 
-  for idx, file in enumerate(file_tuples_names, start=1):
-    filename = getattr(file, "name", f"file_{idx}.xlsx")
-    date_label = extract_date_label(filename, idx)
+      success_data = []
+      for c, v in zip(cols[1:], avg_row[1:]):
+        if pd.notna(c) and str(c).strip() != "Weighted Average":
+          bank_name = HEADER_MAPPING.get(
+              str(c).strip().upper(), str(c).strip()
+          )
+          rate = float(v)
+          success_data.append({
+              "Participant": bank_name,
+              "Success rate": rate,
+              "Target status": (
+                  "Meets target" if rate >= target_pct else "Below target"
+              ),
+          })
 
-    df_raw = pd.read_excel(file, header=None)
-    success_row = None
-    weighted_avg_from_file = None
-    header_row_idx = None
+      rank_df = pd.DataFrame(success_data)
+      rank_df = rank_df.sort_values(
+          by="Success rate", ascending=False
+      ).reset_index(drop=True)
+      rank_df.index += 1
+      rank_df["Rank"] = rank_df.index
+      rank_df = rank_df[
+          ["Rank", "Participant", "Success rate", "Target status"]
+      ]
 
-    for r_idx, row in df_raw.iterrows():
-      row_str = " ".join([str(val) for val in row.values]).upper()
-      if "RC" in row_str and "BANK" in row_str:
-        header_row_idx = r_idx
-        break
+      display_rank = rank_df.copy()
+      display_rank["Success rate"] = display_rank["Success rate"].apply(
+          lambda x: f"{x*100:.2f}%"
+      )
 
-    if header_row_idx is None:
-      for r_idx, row in df_raw.iterrows():
-        row_str = " ".join([str(val) for val in row.values]).upper()
-        match_count = sum(1 for b in ["CBE", "BOA", "DASHEN", "AWASH"] if b in row_str)
-        if match_count >= 2:
-          header_row_idx = r_idx
-          break
+      st.success(
+          f"Success Rate Ranking & Target Evaluation (Target:"
+          f" {target_pct*100:.1f}%)"
+      )
+      st.dataframe(display_rank, use_container_width=True)
 
-    for r_idx, row in df_raw.iterrows():
-      row_str = " ".join([str(val) for val in row.values]).upper()
-      if any(k in row_str for k in ["ISSU", "SUCC", "RATE", "PERCENT"]):
-        success_row = row
-        break
-
-    if success_row is None and len(df_raw) > 3:
-      best_row = None
-      max_valid_count = 0
-      for r_idx, row in df_raw.iterrows():
-        valid_count = 0
-        for val in row.values:
-          try:
-            val_str = str(val).replace("%", "").strip()
-            num = float(val_str)
-            if 0 <= num <= 100:
-              valid_count += 1
-          except:
-            pass
-        if valid_count > max_valid_count:
-          max_valid_count = valid_count
-          best_row = row
-      if max_valid_count >= 3:
-        success_row = best_row
-
-    bank_success_rates = {"Bank/Date": date_label}
-
-    if success_row is not None and header_row_idx is not None:
-      header_vals = df_raw.iloc[header_row_idx].values
-      header_cols = [standardize_bank_name(c) for c in header_vals]
-      
-      for col_idx, col_name in enumerate(header_vals):
-        c_str = str(col_name).upper()
-        if any(term in c_str for term in ["WEIGHTED", "W.AVG", "TOTAL", "AVERAGE"]):
-          try:
-            w_val = success_row.iloc[col_idx]
-            w_str = str(w_val).replace("%", "").strip()
-            val_num = float(w_str)
-            if val_num <= 1.0 and val_num > 0:
-              val_num *= 100
-            weighted_avg_from_file = round(val_num, 1)
-            break
-          except:
-            pass
-
-      if weighted_avg_from_file is None:
-        for col_idx in range(len(success_row) - 1, max(0, len(success_row) - 6), -1):
-          try
+      out_rank = io.BytesIO()
+      with pd.ExcelWriter(out_rank, engine="openpyxl") as writer:
+        rank_df.to_excel(
+            writer, sheet_name="Success Rate Ranking", index=False
+        )
+      st.download_button(
+          "📥 Download Success Rate Ranking (.xlsx)",
+          out_rank.getvalue(),
+          "ATM_Success_Rate_Ranking.xlsx",
+          key="dl_rank",
+      )
