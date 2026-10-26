@@ -49,7 +49,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
             for c, val in zip(cols, vals):
               c_str = str(c).strip().upper().replace("\n", " ")
               
-              # Map banks or special columns
+              # Map headers including Tseday and Weighted Average explicitly
               if c_str in HEADER_MAPPING:
                 b_name = HEADER_MAPPING[c_str]
                 try:
@@ -63,7 +63,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
                   record["Tseday"] = num
                 except:
                   record["Tseday"] = None
-              elif "WEIGHTED" in c_str or ("WEIGHT" in c_str and "AVERAGE" in c_str):
+              elif "WEIGHT" in c_str or "AVERAGE" in c_str:
                 try:
                   num = float(str(val).replace("%", "").strip())
                   record["Weighted Average"] = num
@@ -79,24 +79,25 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
     if success_rows:
       df_success = pd.DataFrame(success_rows)
 
-      # FIX: Proper chronological sorting by converting to actual datetime
+      # FIX: Explicit chronological sorting using exact date format parsing
       try:
-        df_success["_dt"] = pd.to_datetime(df_success["Bank/Date"], format="mixed", errors="coerce")
+        norm_dates = df_success["Bank/Date"].str.replace(r",\s*", ", ", regex=True)
+        df_success["_dt"] = pd.to_datetime(norm_dates, format="%b %d, %Y", errors="coerce")
         df_success = df_success.sort_values(by="_dt").drop(columns=["_dt"]).reset_index(drop=True)
       except Exception as e:
-        # Fallback sort by string length/day number if datetime parsing fails
         pass
 
-      # Ensure standard column ordering if desired, keeping Bank/Date first and Weighted Average last
-      fixed_cols = ["Bank/Date"] + [c for c in df_success.columns if c != "Bank/Date" and c != "Weighted Average"]
+      # Ensure correct column positioning (Bank/Date first, Weighted Average last if present)
+      bank_cols = [c for c in df_success.columns if c != "Bank/Date" and c != "Weighted Average"]
+      ordered_cols = ["Bank/Date"] + bank_cols
       if "Weighted Average" in df_success.columns:
-        fixed_cols.append("Weighted Average")
-      df_success = df_success[[c for c in fixed_cols if c in df_success.columns]]
+        ordered_cols.append("Weighted Average")
+      df_success = df_success[[c for c in ordered_cols if c in df_success.columns]]
 
       # Calculate Average row at the bottom
       avg_dict = {"Bank/Date": "Average"}
-      bank_cols = [c for c in df_success.columns if c != "Bank/Date"]
-      for col in bank_cols:
+      calc_cols = [c for c in df_success.columns if c != "Bank/Date"]
+      for col in calc_cols:
         numeric_vals = pd.to_numeric(df_success[col], errors="coerce")
         avg_dict[col] = numeric_vals.mean()
 
@@ -106,7 +107,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
 
       for idx, row in df_success.iterrows():
         is_avg = str(row["Bank/Date"]).strip().lower() == "average"
-        for col in bank_cols:
+        for col in calc_cols:
           val = row[col]
           try:
             num = float(val)
@@ -118,7 +119,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
             pct_str = f"{pct_val:.1f}%"
 
             if is_avg:
-              # Color coding ONLY on the Average row
+              # Color-coding rules applied STRICTLY to the bottom Average row
               ratio = num if num <= 1.0 else num / 100.0
               if ratio >= 0.985:
                 display_df.at[idx, col] = f"<span style='background-color: #2ecc71; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
