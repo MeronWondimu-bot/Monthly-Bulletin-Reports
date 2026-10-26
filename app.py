@@ -303,7 +303,9 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
           [df_success, pd.DataFrame([avg_dict])], ignore_index=True
       )
 
-      display_df = df_success.copy()
+      # Convert to object type so string/HTML formatting applies properly
+      display_df = df_success.astype(object)
+
       for idx, row in df_success.iterrows():
         is_avg = str(row["Bank/Date"]).strip().lower() == "average"
         for col in bank_cols:
