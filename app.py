@@ -155,7 +155,7 @@ st.markdown("---")
 if report_type == "Home / Overview":
   st.subheader("Welcome to the EthSwitch Reporting Hub")
   st.markdown("""
-    * **1. ATM Decline Summary:** Daily responses aggregated per bank (excluding Gedaa, highlighted if > 100).
+    * **1. ATM Decline Summary:** Daily responses aggregated per bank (excluding Gedaa, highlighted if > 100, with integer values and TOTAL row).
     * **2. ATM Transaction Success Rate Summary:** Daily success rates extracted using 'Issu. SUCC. RATE (%)' row, highlighting rates $\le 79\%$ in red.
     * **3. ATM Success Rate Ranking:** Ranked descending from top to bottom using uploaded source files.
     * **4. ATM decline contribution by participant:** Participant shares.
@@ -182,19 +182,34 @@ elif report_type == "1. ATM Decline Summary":
         combined_decline.groupby(rc_col)[valid_cols].sum().reset_index()
     )
 
+    # Append TOTAL row at the bottom
+    total_row = {rc_col: "TOTAL"}
+    for col in valid_cols:
+      total_row[col] = summary_pivot[col].sum()
 
-    def highlight_above_100(val):
+    summary_pivot = pd.concat(
+        [summary_pivot, pd.DataFrame([total_row])], ignore_index=True
+    )
+
+
+    # Format values as integers and highlight values > 100 in red
+    def format_and_highlight(val):
       try:
-        if float(val) > 100:
-          return "color: red; font-weight: bold;"
+        num = float(val)
+        formatted = f"{int(num):,}"
+        if num > 100:
+          return f"<span style='color: red; font-weight: bold;'>{formatted}</span>"
+        return formatted
       except:
-        pass
-      return ""
+        return str(val)
 
 
-    st.dataframe(
-        summary_pivot.style.map(highlight_above_100, subset=valid_cols),
-        use_container_width=True,
+    display_df = summary_pivot.copy()
+    for col in valid_cols:
+      display_df[col] = display_df[col].apply(format_and_highlight)
+
+    st.markdown(
+        display_df.to_html(escape=False, index=False), unsafe_allow_html=True
     )
 
     out_sum = io.BytesIO()
@@ -213,7 +228,6 @@ elif report_type == "1. ATM Decline Summary":
 
 elif report_type == "2. ATM Transaction Success Rate Summary":
   st.subheader("📈 ATM Transaction Success Rate Summary")
-  success_summary_df = None
   if uploaded_files:
     daily_success_frames = []
     for file in uploaded_files:
@@ -284,7 +298,7 @@ elif report_type == "3. ATM Success Rate Ranking":
                 try:
                   val = float(str(v).replace("%", ""))
                   if val > 1:
-                    val = val / 100.0  # normalize percentage
+                    val = val / 100.0
                   success_data.setdefault(bank_name, []).append(val)
                 except:
                   pass
