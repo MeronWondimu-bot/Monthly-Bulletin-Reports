@@ -230,53 +230,41 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
     for file in uploaded_files:
       try:
         xls = pd.ExcelFile(file)
-        file_date = file.name.split(".")[0].strip()
+        # Use exact date format from filename as requested (e.g. Oct 1,2026)
+        file_date = (
+            file.name.split(".")[0]
+            .replace("ATM Declined Transaction Report for", "")
+            .replace("ATM Success Rate", "")
+            .strip()
+        )
+
         for sheet_name in xls.sheet_names:
           df_sheet = pd.read_excel(file, sheet_name=sheet_name)
-          # Ensure sheet has at least 36 rows (index 35)
           if len(df_sheet) > 35:
-            # Row 36 in Excel corresponds to index 35 in pandas
+            # Target Row 36 (index 35)
             target_row = df_sheet.iloc[35]
-
-            # Find header row (usually contains bank names, let's look around row index 2-5 or use sheet columns)
-            # We map columns using HEADER_MAPPING against column names or header row
             record = {"Bank/Date": file_date}
 
             for col_idx, val in enumerate(target_row.values):
-              # Check column header name
-              col_name = (
-                  str(df_sheet.columns[col_idx]).strip().upper()
-                  if col_idx < len(df_sheet.columns)
-                  else ""
-              )
-              # Also check if header exists in row 0-5
+              col_name = ""
               for h_idx in range(min(6, len(df_sheet))):
                 h_val = str(df_sheet.iloc[h_idx, col_idx]).strip().upper()
                 if h_val in HEADER_MAPPING:
                   col_name = h_val
                   break
 
+              if not col_name and col_idx < len(df_sheet.columns):
+                col_name = str(df_sheet.columns[col_idx]).strip().upper()
+
               if col_name in HEADER_MAPPING:
                 b_name = HEADER_MAPPING[col_name]
-                try:
-                  num = float(str(val).replace("%", "").strip())
-                  if num > 1.0:
-                    num = num / 100.0
-                  record[b_name] = num
-                except:
-                  record[b_name] = None
+                record[b_name] = val
               elif "WEIGHTED" in col_name or "AVERAGE" in col_name:
-                try:
-                  num = float(str(val).replace("%", "").strip())
-                  if num > 1.0:
-                    num = num / 100.0
-                  record["Weighted Average"] = num
-                except:
-                  pass
+                record["Weighted Average"] = val
 
             if len(record) > 1:
               success_rows.append(record)
-              break  # Found in this file, move to next file
+              break
       except Exception as e:
         st.error(f"Error reading {file.name}: {e}")
 
@@ -284,30 +272,44 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       df_success = pd.DataFrame(success_rows)
       bank_cols = [c for c in df_success.columns if c != "Bank/Date"]
 
-      # Calculate Average row at the bottom
+      # Calculate Average row at the bottom using raw numeric values
       avg_dict = {"Bank/Date": "Average"}
       for col in bank_cols:
-        avg_dict[col] = df_success[col].mean()
+        numeric_vals = pd.to_numeric(
+            df_success[col]
+            .astype(str)
+            .str.replace("%", "", regex=True)
+            .str.strip(),
+            errors="coerce",
+        )
+        avg_dict[col] = numeric_vals.mean()
 
       df_success = pd.concat(
           [df_success, pd.DataFrame([avg_dict])], ignore_index=True
       )
 
 
-      # Color Coding Rules:
-      # 98.5% - 100% (>= 0.985): Green (#2ecc71)
-      # 90% - 98% (0.90 - 0.9849): Yellow (#f1c40f)
-      # 80% - 89% (0.80 - 0.899): Light Yellow (#fef9e7 / dark text)
-      # <=79% (<= 0.79): Red (#e74c3c)
+      # Color-coding & formatting rules:
+      # 98.5% - 100% -> Green
+      # 90% - 98% -> Yellow
+      # 80% - 89% -> Light Yellow
+      # <=79% -> Red
       def apply_success_styling(val):
         try:
-          num = float(val)
-          pct_str = f"{num*100:.1f}%"
-          if num >= 0.985:
+          clean_val = str(val).replace("%", "").strip()
+          num = float(clean_val)
+          if num <= 1.0 and num > 0:
+            normalized = num
+            pct_str = f"{num*100:.1f}%"
+          else:
+            normalized = num / 100.0
+            pct_str = f"{num:.1f}%" if "%" in str(val) else f"{num}%"
+
+          if normalized >= 0.985:
             return f"<span style='background-color: #2ecc71; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-          elif num >= 0.90:
+          elif normalized >= 0.90:
             return f"<span style='background-color: #f1c40f; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-          elif num >= 0.80:
+          elif normalized >= 0.80:
             return f"<span style='background-color: #fcf3cf; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
           else:
             return f"<span style='background-color: #e74c3c; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
