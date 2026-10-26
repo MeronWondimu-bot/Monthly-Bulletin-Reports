@@ -273,16 +273,12 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
                 b_name = HEADER_MAPPING[c_str]
                 try:
                   num = float(str(val).replace("%", "").strip())
-                  if num > 1.0:
-                    num = num / 100.0
                   record[b_name] = num
                 except:
                   record[b_name] = None
               elif "WEIGHTED" in c_str or "AVERAGE" in c_str:
                 try:
                   num = float(str(val).replace("%", "").strip())
-                  if num > 1.0:
-                    num = num / 100.0
                   record["Weighted Average"] = num
                 except:
                   pass
@@ -297,7 +293,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       df_success = pd.DataFrame(success_rows)
       bank_cols = [c for c in df_success.columns if c != "Bank/Date"]
 
-      # Calculate Average row at the bottom
+      # Calculate Average row at the bottom (as decimal ratio for math)
       avg_dict = {"Bank/Date": "Average"}
       for col in bank_cols:
         numeric_vals = pd.to_numeric(df_success[col], errors="coerce")
@@ -317,19 +313,23 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
             if pd.isna(num):
               display_df.at[idx, col] = ""
               continue
-            pct_str = f"{num*100:.1f}%"
+
+            # If stored as decimal like 0.9947, convert to percentage value (99.5%)
+            pct_val = num * 100 if num <= 1.0 else num
+            pct_str = f"{pct_val:.1f}%"
 
             if is_avg:
               # Apply color coding ONLY to the Average row at the bottom
-              if num >= 0.985:
+              ratio = num if num <= 1.0 else num / 100.0
+              if ratio >= 0.985:
                 display_df.at[
                     idx, col
                 ] = f"<span style='background-color: #2ecc71; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-              elif num >= 0.90:
+              elif ratio >= 0.90:
                 display_df.at[
                     idx, col
                 ] = f"<span style='background-color: #f1c40f; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-              elif num >= 0.80:
+              elif ratio >= 0.80:
                 display_df.at[
                     idx, col
                 ] = f"<span style='background-color: #fcf3cf; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
@@ -338,7 +338,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
                     idx, col
                 ] = f"<span style='background-color: #e74c3c; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
             else:
-              # Regular daily rows display as plain percentage without background color
+              # Regular daily rows display as plain percentage string
               display_df.at[idx, col] = pct_str
           except:
             pass
