@@ -248,7 +248,6 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
             sub_df = df_sheet.iloc[header_idx + 1 :].copy()
             date_col = sub_df.columns[0]
             sub_df = sub_df.dropna(subset=[date_col])
-            # Filter out bottom summary rows if already present in source
             sub_df = sub_df[
                 ~sub_df[date_col]
                 .astype(str)
@@ -263,7 +262,6 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       date_col = combined_success.columns[0]
       combined_success.rename(columns={date_col: "Bank/Date"}, inplace=True)
 
-      # Identify valid bank columns and Weighted Average
       bank_cols = []
       weight_col = None
       for c in combined_success.columns:
@@ -280,30 +278,27 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
             bank_cols.append(mapped_name)
             combined_success.rename(columns={c: mapped_name}, inplace=True)
 
-      # Ensure unique columns
       cols_to_keep = ["Bank/Date"] + bank_cols
       if weight_col:
         cols_to_keep.append(weight_col)
 
-      # Keep only columns that exist in dataframe
       existing_cols = [
           c for c in cols_to_keep if c in combined_success.columns
       ]
       final_success = combined_success[existing_cols].copy()
 
-      # Convert rate columns to numeric
       rate_cols = [c for c in existing_cols if c != "Bank/Date"]
       for col in rate_cols:
-        final_success[col] = (
+        cleaned_series = (
             final_success[col]
             .astype(str)
             .str.replace("%", "", regex=True)
-            .astype(float)
-            .div(100)
-            .fillna(0)
+            .str.strip()
+        )
+        final_success[col] = (
+            pd.to_numeric(cleaned_series, errors="coerce").fillna(0) / 100.0
         )
 
-      # Calculate Average row at the bottom
       avg_row = {"Bank/Date": "Average"}
       for col in rate_cols:
         avg_row[col] = final_success[col].mean()
@@ -313,8 +308,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       )
 
 
-      # Formatting and Highlighting (<= 79% or 0.79 in red)
-      def format_success(val, is_avg_row=False):
+      def format_success(val):
         try:
           num = float(val)
           pct_str = f"{num*100:.1f}%"
@@ -325,16 +319,9 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
           return str(val)
 
 
-      display_success = final_success.copy()
-      formatted_rows = []
-      for idx, row in final_success.iterrows():
-        is_avg = str(row["Bank/Date"]).strip().lower() == "average"
-        new_row = {"Bank/Date": row["Bank/Date"]}
-        for col in rate_cols:
-          new_row[col] = format_success(row[col])
-        formatted_rows.append(new_row)
-
-      display_df = pd.DataFrame(formatted_rows)
+      display_df = final_success.copy()
+      for col in rate_cols:
+        display_df[col] = display_df[col].apply(format_success)
 
       st.markdown(
           display_df.to_html(escape=False, index=False), unsafe_allow_html=True
@@ -406,68 +393,5 @@ elif report_type == "4. ATM decline contribution by participant":
     ].apply(lambda x: f"{x:.2%}")
 
     st.dataframe(display_part, use_container_width=True)
-  else:
-    st.info("👆 Please upload your daily decline Excel files at the top.")
-
-# ==========================================
-# 5. MAJOR ATM DECLINED TRANSACTIONS
-# ==========================================
-elif report_type == "5. Major ATM declined transactions":
-  st.subheader("🔍 Major ATM Declined Transactions")
-  if combined_decline is not None:
-    rc_col = combined_decline.columns[0]
-    combined_decline[rc_col] = (
-        pd.to_numeric(combined_decline[rc_col], errors="coerce")
-        .fillna(0)
-        .astype(int)
-        .astype(str)
-    )
-
-    total_col = [
-        c for c in combined_decline.columns if "total" in str(c).lower()
-    ]
-    if total_col:
-      combined_decline["Total_Numeric"] = pd.to_numeric(
-          combined_decline[total_col[0]], errors="coerce"
-      ).fillna(0)
-    else:
-      bank_cols = [
-          c
-          for c in combined_decline.columns
-          if c != rc_col
-          and "gedaa" not in str(c).lower()
-          and "gadaa" not in str(c).lower()
-      ]
-      combined_decline["Total_Numeric"] = (
-          combined_decline[bank_cols]
-          .apply(pd.to_numeric, errors="coerce")
-          .fillna(0)
-          .sum(axis=1)
-      )
-
-    rc_summary = (
-        combined_decline.groupby(rc_col)["Total_Numeric"].sum().reset_index()
-    )
-    rc_summary.columns = ["Response code", "Declined transactions"]
-    rc_summary = rc_summary.sort_values(
-        by="Declined transactions", ascending=False
-    ).reset_index(drop=True)
-
-    total_declines_rc = rc_summary["Declined transactions"].sum()
-    rc_summary["Share of ATM declines"] = (
-        rc_summary["Declined transactions"] / total_declines_rc
-        if total_declines_rc > 0
-        else 0
-    )
-
-    display_rc = rc_summary.copy()
-    display_rc["Declined transactions"] = display_rc[
-        "Declined transactions"
-    ].apply(lambda x: f"{int(x):,}")
-    display_rc["Share of ATM declines"] = display_rc[
-        "Share of ATM declines"
-    ].apply(lambda x: f"{x:.2%}")
-
-    st.dataframe(display_rc, use_container_width=True)
   else:
     st.info("👆 Please upload your daily decline Excel files at the top.")
