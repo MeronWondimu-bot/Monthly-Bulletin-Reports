@@ -384,4 +384,102 @@ elif report_type == "4. ATM decline contribution by participant":
         else 0
     )
 
-    display_part = part_df
+    display_part = part_df.copy()
+    display_part["Declined transactions"] = display_part[
+        "Declined transactions"
+    ].apply(lambda x: f"{int(x):,}")
+    display_part["Share of ATM declines"] = display_part[
+        "Share of ATM declines"
+    ].apply(lambda x: f"{x:.2%}")
+
+    st.dataframe(display_part, use_container_width=True)
+
+    out_part = io.BytesIO()
+    with pd.ExcelWriter(out_part, engine="openpyxl") as writer:
+      part_df.to_excel(
+          writer, sheet_name="Participant Contribution", index=False
+      )
+    st.download_button(
+        "📥 Download Participant Contribution Report (.xlsx)",
+        out_part.getvalue(),
+        "Decline_Contribution_By_Participant.xlsx",
+        key="dl_part_4",
+    )
+  else:
+    st.info(
+        "👆 Please upload your daily decline Excel files at the top to view"
+        " participant contributions."
+    )
+
+elif report_type == "5. Major ATM declined transactions":
+  st.subheader("🔍 5. Major ATM Declined Transactions (Response Codes)")
+  if combined_decline is not None:
+    rc_col = combined_decline.columns[0]
+    combined_decline[rc_col] = (
+        pd.to_numeric(combined_decline[rc_col], errors="coerce")
+        .fillna(0)
+        .astype(int)
+        .astype(str)
+    )
+
+    total_col = [
+        c for c in combined_decline.columns if "total" in str(c).lower()
+    ]
+    if total_col:
+      combined_decline["Total_Numeric"] = pd.to_numeric(
+          combined_decline[total_col[0]], errors="coerce"
+      ).fillna(0)
+    else:
+      bank_cols = [
+          c
+          for c in combined_decline.columns
+          if c != rc_col
+          and "gedaa" not in str(c).lower()
+          and "gadaa" not in str(c).lower()
+      ]
+      combined_decline["Total_Numeric"] = (
+          combined_decline[bank_cols]
+          .apply(pd.to_numeric, errors="coerce")
+          .fillna(0)
+          .sum(axis=1)
+      )
+
+    rc_summary = (
+        combined_decline.groupby(rc_col)["Total_Numeric"].sum().reset_index()
+    )
+    rc_summary.columns = ["Response code", "Declined transactions"]
+    rc_summary = rc_summary.sort_values(
+        by="Declined transactions", ascending=False
+    ).reset_index(drop=True)
+
+    total_declines_rc = rc_summary["Declined transactions"].sum()
+    rc_summary["Share of ATM declines"] = (
+        rc_summary["Declined transactions"] / total_declines_rc
+        if total_declines_rc > 0
+        else 0
+    )
+
+    display_rc = rc_summary.copy()
+    display_rc["Declined transactions"] = display_rc[
+        "Declined transactions"
+    ].apply(lambda x: f"{int(x):,}")
+    display_rc["Share of ATM declines"] = display_rc[
+        "Share of ATM declines"
+    ].apply(lambda x: f"{x:.2%}")
+
+    st.dataframe(display_rc, use_container_width=True)
+
+    out_rc = io.BytesIO()
+    with pd.ExcelWriter(out_rc, engine="openpyxl") as writer:
+      rc_summary.to_excel(writer, sheet_name="Major Causes", index=False)
+    st.download_button(
+        "📥 Download Major Causes Report (.xlsx)",
+        out_rc.getvalue(),
+        "Major_Causes_Of_Declines.xlsx",
+        key="dl_rc_5",
+    )
+  else:
+    st.info(
+        "👆 Please upload your daily decline Excel files at the top to view"
+        " major declined transactions."
+    )
