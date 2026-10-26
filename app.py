@@ -27,19 +27,19 @@ st.markdown("""
         }
         .banner {
             background-color: #fdf2e9;
-            padding: 15px;
+            padding: 12px;
             border-radius: 5px;
             border-left: 5px solid #d35400;
             text-align: center;
             font-weight: bold;
             color: #d35400;
-            font-size: 20px;
-            margin-bottom: 25px;
+            font-size: 18px;
+            margin-bottom: 20px;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# Top Header / Logos Section
+# Top Header Section
 col_logo1, col_title, col_logo2 = st.columns([1, 3, 1])
 with col_logo1:
   st.markdown("### 🏢 ETHSWITCH")
@@ -62,38 +62,15 @@ st.markdown(
 )
 
 # ----------------------------------------------------
-# REPORT CATEGORY SELECTOR
+# REPORT SELECTOR (Default to Decline Summary first)
 # ----------------------------------------------------
-st.markdown("**REPORT CATEGORY**")
-category = st.radio(
-    "Category",
-    ["Standard Reports", "MEA / Merged Reports (Temporary)"],
-    label_visibility="collapsed",
+st.markdown("### 📌 Select Report")
+report_type = st.radio(
+    "Report Selection",
+    ["1. Decline transactions summary", "2. Success Rate Ranking & Summary"],
     horizontal=True,
+    label_visibility="collapsed",
 )
-
-st.markdown("---")
-
-# ----------------------------------------------------
-# REPORT SELECTOR (Horizontal Navigation)
-# ----------------------------------------------------
-if category == "Standard Reports":
-  st.markdown("**REPORT**")
-  report_type = st.radio(
-      "Report Type",
-      [
-          "Home / Overview",
-          "1. Decline trasnactions summery",
-          "2. Success Rate Ranking & Summary",
-      ],
-      label_visibility="collapsed",
-      horizontal=True,
-  )
-else:
-  st.info(
-      "MEA / Merged Reports category is currently empty or under development."
-  )
-  report_type = "Home / Overview"
 
 st.markdown("---")
 
@@ -165,30 +142,19 @@ def process_decline_file(file):
 
 
 # ==========================================
-# HOME / OVERVIEW
-# ==========================================
-if report_type == "Home / Overview":
-  st.subheader("Welcome to the Central Dashboard")
-  st.markdown("""
-    Use the horizontal navigation above to select your report category and specific report type:
-    
-    * **1. Decline trasnactions summery:** Consolidates daily sheets to display participant contributions and major cause response codes.
-    * **2. Success Rate Ranking & Summary:** Automatically evaluates participating banks against the **98.5% target threshold** and generates ranking tables.
-    """)
-
-# ==========================================
 # 1. DECLINE TRANSACTIONS SUMMARY
 # ==========================================
-elif report_type == "1. Decline trasnactions summery":
-  st.subheader("📊 ATM Decline Transactions Summary")
+if report_type == "1. Decline transactions summary":
+  st.subheader("📊 Step 1: Upload ATM Decline Excel Workbook")
 
   decline_file = st.file_uploader(
-      "Upload ATM Decline Workbook (.xlsx / .xls)",
+      "Drop your multi-sheet ATM Decline Excel file here (.xlsx / .xls):",
       type=["xlsx", "xls"],
-      key="decline_summary",
+      key="decline_summary_main",
   )
 
   if decline_file is not None:
+    st.success("File uploaded successfully! Processing data...")
     combined_decline = process_decline_file(decline_file)
 
     if combined_decline is not None:
@@ -309,12 +275,14 @@ elif report_type == "1. Decline trasnactions summery":
             "Major_Causes_Of_Declines.xlsx",
             key="dl_rc",
         )
+  else:
+    st.info("👆 Please upload your ATM Decline Excel file above to generate the report.")
 
 # ==========================================
 # 2. SUCCESS RATE RANKING & SUMMARY
 # ==========================================
 elif report_type == "2. Success Rate Ranking & Summary":
-  st.subheader("🏆 ATM Success Rate Ranking & Target Evaluation")
+  st.subheader("🏆 Step 1: Upload ATM Success Rate Excel File")
 
   target_pct = (
       st.slider(
@@ -328,12 +296,13 @@ elif report_type == "2. Success Rate Ranking & Summary":
   )
 
   success_file = st.file_uploader(
-      "Upload ATM Success Rate Report (.xlsx / .xls)",
+      "Drop your ATM Success Rate Excel file here (.xlsx / .xls):",
       type=["xlsx", "xls"],
-      key="ranking_file",
+      key="ranking_file_main",
   )
 
   if success_file is not None:
+    st.success("File uploaded successfully! Processing data...")
     df_success = pd.read_excel(success_file, sheet_name=0)
 
     header_idx, avg_idx = None, None
@@ -395,3 +364,5 @@ elif report_type == "2. Success Rate Ranking & Summary":
           "ATM_Success_Rate_Ranking.xlsx",
           key="dl_rank",
       )
+  else:
+    st.info("👆 Please upload your ATM Success Rate Excel file above to see bank rankings.")
