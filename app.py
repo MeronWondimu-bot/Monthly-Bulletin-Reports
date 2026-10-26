@@ -102,7 +102,7 @@ def process_all_decline_files(files):
           rc_col = sub_df.columns[0]
           sub_df = sub_df.dropna(subset=[rc_col])
 
-          # Filter out unwanted header/label rows like 'Total', 'RC', 'Response Code'
+          # Filter out unwanted label rows
           sub_df = sub_df[
               ~sub_df[rc_col]
               .astype(str)
@@ -122,7 +122,7 @@ combined_decline = None
 if uploaded_files:
   combined_decline = process_all_decline_files(uploaded_files)
 
-# Report Selection Menu (Focused on Report 1)
+# Report Selection Menu
 report_type = st.radio(
     "Report Selection",
     ["1. ATM Decline Summary"],
@@ -136,7 +136,7 @@ if report_type == "1. ATM Decline Summary":
   if combined_decline is not None:
     rc_col = combined_decline.columns[0]
 
-    # Strictly filter out Gedaa / Gadaa entirely from columns and calculations
+    # Filter out Gedaa / Gadaa entirely from columns and calculations
     valid_cols = []
     for c in combined_decline.columns:
       c_str = str(c).strip().upper()
@@ -161,9 +161,12 @@ if report_type == "1. ATM Decline Summary":
     )
     summary_pivot.rename(columns={rc_col: "RC"}, inplace=True)
 
-    # Append TOTAL row strictly excluding Gedaa
+    # Re-calculate the Total column across the valid bank columns
+    summary_pivot["Total"] = summary_pivot[valid_cols].sum(axis=1)
+
+    # Append TOTAL summary row at the bottom
     total_row = {"RC": "TOTAL"}
-    for col in valid_cols:
+    for col in valid_cols + ["Total"]:
       total_row[col] = summary_pivot[col].sum()
 
     summary_pivot = pd.concat(
@@ -182,8 +185,9 @@ if report_type == "1. ATM Decline Summary":
         return str(val)
 
 
+    display_cols = valid_cols + ["Total"]
     display_df = summary_pivot.copy()
-    for col in valid_cols:
+    for col in display_cols:
       display_df[col] = display_df[col].apply(format_and_highlight)
 
     st.markdown(
