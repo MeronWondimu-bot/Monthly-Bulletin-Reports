@@ -226,76 +226,101 @@ if report_type == "1. ATM Decline Summary":
 elif report_type == "2. ATM Transaction Success Rate Summary":
   st.subheader("📈 ATM Transaction Success Rate Summary")
   if uploaded_files:
-    success_records = []
+    success_rows = []
     for file in uploaded_files:
       try:
         xls = pd.ExcelFile(file)
-        # Use file name as date indicator (e.g., '1-Oct.xlsx' -> '1-Oct')
-        file_date_label = file.name.split(".")[0]
+        file_date = file.name.split(".")[0].strip()
         for sheet_name in xls.sheet_names:
           df_sheet = pd.read_excel(file, sheet_name=sheet_name)
-          for idx, row in df_sheet.iterrows():
-            row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
-            if "Issu. SUCC. RATE (%)" in row_str or "SUCC. RATE" in row_str:
-              # Found the success rate row! Map its values across columns
-              col_vals = df_sheet.columns.tolist()
-              row_vals = row.values.tolist()
+          # Ensure sheet has at least 36 rows (index 35)
+          if len(df_sheet) > 35:
+            # Row 36 in Excel corresponds to index 35 in pandas
+            target_row = df_sheet.iloc[35]
 
-              record = {"Bank/Date": file_date_label}
-              for c, val in zip(col_vals, row_vals):
-                c_str = str(c).strip().upper()
-                if c_str in HEADER_MAPPING:
-                  bank_name = HEADER_MAPPING[c_str]
-                  try:
-                    num_val = float(str(val).replace("%", "").strip())
-                    if num_val > 1:
-                      num_val = num_val / 100.0
-                    record[bank_name] = num_val
-                  except:
-                    record[bank_name] = None
-              success_records.append(record)
-              break
+            # Find header row (usually contains bank names, let's look around row index 2-5 or use sheet columns)
+            # We map columns using HEADER_MAPPING against column names or header row
+            record = {"Bank/Date": file_date}
+
+            for col_idx, val in enumerate(target_row.values):
+              # Check column header name
+              col_name = (
+                  str(df_sheet.columns[col_idx]).strip().upper()
+                  if col_idx < len(df_sheet.columns)
+                  else ""
+              )
+              # Also check if header exists in row 0-5
+              for h_idx in range(min(6, len(df_sheet))):
+                h_val = str(df_sheet.iloc[h_idx, col_idx]).strip().upper()
+                if h_val in HEADER_MAPPING:
+                  col_name = h_val
+                  break
+
+              if col_name in HEADER_MAPPING:
+                b_name = HEADER_MAPPING[col_name]
+                try:
+                  num = float(str(val).replace("%", "").strip())
+                  if num > 1.0:
+                    num = num / 100.0
+                  record[b_name] = num
+                except:
+                  record[b_name] = None
+              elif "WEIGHTED" in col_name or "AVERAGE" in col_name:
+                try:
+                  num = float(str(val).replace("%", "").strip())
+                  if num > 1.0:
+                    num = num / 100.0
+                  record["Weighted Average"] = num
+                except:
+                  pass
+
+            if len(record) > 1:
+              success_rows.append(record)
+              break  # Found in this file, move to next file
       except Exception as e:
-        st.error(f"Error processing {file.name}: {e}")
+        st.error(f"Error reading {file.name}: {e}")
 
-    if success_records:
-      df_success = pd.DataFrame(success_records)
+    if success_rows:
+      df_success = pd.DataFrame(success_rows)
+      bank_cols = [c for c in df_success.columns if c != "Bank/Date"]
 
-      # Identify active bank columns present in records
-      bank_columns = [
-          c for c in df_success.columns if c != "Bank/Date"
-      ]
-
-      # Compute Average row at the bottom
+      # Calculate Average row at the bottom
       avg_dict = {"Bank/Date": "Average"}
-      for b_col in bank_columns:
-        avg_dict[b_col] = df_success[b_col].mean()
+      for col in bank_cols:
+        avg_dict[col] = df_success[col].mean()
 
       df_success = pd.concat(
           [df_success, pd.DataFrame([avg_dict])], ignore_index=True
       )
 
 
-      def format_success_cell(val):
+      # Color Coding Rules:
+      # 98.5% - 100% (>= 0.985): Green (#2ecc71)
+      # 90% - 98% (0.90 - 0.9849): Yellow (#f1c40f)
+      # 80% - 89% (0.80 - 0.899): Light Yellow (#fef9e7 / dark text)
+      # <=79% (<= 0.79): Red (#e74c3c)
+      def apply_success_styling(val):
         try:
           num = float(val)
           pct_str = f"{num*100:.1f}%"
-          if num <= 0.79:
-            return f"<span style='color: red; font-weight: bold;'>{pct_str}</span>"
-          return pct_str
+          if num >= 0.985:
+            return f"<span style='background-color: #2ecc71; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
+          elif num >= 0.90:
+            return f"<span style='background-color: #f1c40f; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
+          elif num >= 0.80:
+            return f"<span style='background-color: #fcf3cf; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
+          else:
+            return f"<span style='background-color: #e74c3c; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
         except:
           return str(val)
 
 
-      display_success = df_success.copy()
-      for b_col in bank_columns:
-        display_success[b_col] = display_success[b_col].apply(
-            format_success_cell
-        )
+      display_df = df_success.copy()
+      for col in bank_cols:
+        display_df[col] = display_df[col].apply(apply_success_styling)
 
       st.markdown(
-          display_success.to_html(escape=False, index=False),
-          unsafe_allow_html=True,
+          display_df.to_html(escape=False, index=False), unsafe_allow_html=True
       )
 
       out_succ = io.BytesIO()
@@ -311,7 +336,8 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       )
     else:
       st.warning(
-          "Could not locate 'Issu. SUCC. RATE (%)' rows in the uploaded files."
+          "Could not locate row 36 in the uploaded files. Please check file"
+          " structure."
       )
   else:
     st.info("👆 Please upload your daily source report files at the top.")
