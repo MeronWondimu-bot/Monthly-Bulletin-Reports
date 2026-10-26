@@ -1,4 +1,5 @@
 import io
+import re
 import pandas as pd
 import streamlit as st
 
@@ -71,7 +72,7 @@ HEADER_MAPPING = {
     "WGB": "Wegagen",
     "UB": "Hibret",
     "NIB": "NIB",
-    "Tseday": "Tseday",
+    "TSEDAY": "Tseday",
     "ZEMEN": "Zemen",
     "BUNNA": "Bunna",
     "ZAMZAM": "ZamZam",
@@ -82,6 +83,7 @@ HEADER_MAPPING = {
     "AHADU": "Ahadu",
     "DGB": "Global",
     "OB": "Oromia",
+    "WEIGHTED AVERAGE": "Weighted Average",
 }
 
 
@@ -230,12 +232,13 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
     for file in uploaded_files:
       try:
         xls = pd.ExcelFile(file)
-        file_date = (
-            file.name.split(".")[0]
-            .replace("ATM Declined Transaction Report for", "")
+        raw_name = file.name.split(".")[0]
+        cleaned_name = (
+            raw_name.replace("ATM Declined Transaction Report for", "")
             .replace("ATM Success Rate", "")
             .strip()
         )
+        file_date = re.sub(r",\s+", ",", cleaned_name)
 
         for sheet_name in xls.sheet_names:
           df_sheet = pd.read_excel(file, sheet_name=sheet_name)
@@ -276,12 +279,6 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
                   record[b_name] = num
                 except:
                   record[b_name] = None
-              elif "WEIGHTED" in c_str or "AVERAGE" in c_str:
-                try:
-                  num = float(str(val).replace("%", "").strip())
-                  record["Weighted Average"] = num
-                except:
-                  pass
 
             if len(record) > 1:
               success_rows.append(record)
@@ -291,6 +288,18 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
 
     if success_rows:
       df_success = pd.DataFrame(success_rows)
+
+      # Sort chronologically by date
+      try:
+        df_success["_temp_date"] = pd.to_datetime(
+            df_success["Bank/Date"], errors="coerce"
+        )
+        df_success = df_success.sort_values(by="_temp_date").drop(
+            columns=["_temp_date"]
+        )
+      except:
+        pass
+
       bank_cols = [c for c in df_success.columns if c != "Bank/Date"]
 
       # Calculate Average row at the bottom
@@ -303,7 +312,6 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
           [df_success, pd.DataFrame([avg_dict])], ignore_index=True
       )
 
-      # Convert to object type so string/HTML formatting applies properly
       display_df = df_success.astype(object)
 
       for idx, row in df_success.iterrows():
