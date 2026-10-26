@@ -83,6 +83,7 @@ HEADER_MAPPING = {
     "AHADU": "Ahadu",
     "DGB": "Global",
     "OB": "Oromia",
+    "WEIGHTED AVERAGE": "Weighted Average",
 }
 
 
@@ -303,6 +304,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       except Exception:
         pass
 
+      # Column ordering: Bank/Date first, standard banks, and Weighted Average last
       bank_cols = [c for c in df_success.columns if c != "Bank/Date" and c != "Weighted Average"]
       ordered_cols = ["Bank/Date"] + bank_cols
       if "Weighted Average" in df_success.columns:
