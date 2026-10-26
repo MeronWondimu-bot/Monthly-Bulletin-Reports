@@ -9,7 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Custom CSS for UI styling & Red Highlighting
+# Custom CSS for UI styling
 st.markdown("""
     <style>
         .banner {
@@ -56,7 +56,7 @@ uploaded_files = st.file_uploader(
 
 st.markdown("---")
 
-# Header Mapping for Clean Bank Names (excluding Gedaa from totals/mapping if specified)
+# Header Mapping for Clean Bank Names
 HEADER_MAPPING = {
     "CBE": "CBE",
     "BOA": "BOA",
@@ -134,12 +134,12 @@ st.markdown(
 )
 
 report_type = st.radio(
-    "Report Type Selection",
+    "Report Selection",
     [
         "Home / Overview",
-        "1. ATM decline summery",
+        "1. ATM Decline Summary",
         "2. ATM Transaction Success Rate Summary",
-        "3. ATM success rate ranking",
+        "3. ATM Success Rate Ranking",
         "4. ATM decline contribution by participant",
         "5. Major ATM declined transactions",
     ],
@@ -155,31 +155,34 @@ st.markdown("---")
 if report_type == "Home / Overview":
   st.subheader("Welcome to the EthSwitch Reporting Hub")
   st.markdown("""
-    * **1. ATM decline summery:** Daily responses aggregated per bank (excluding Gedaa, highlighted if > 100).
+    * **1. ATM Decline Summary:** Daily responses aggregated per bank (excluding Gedaa, highlighted if > 100).
     * **2. ATM Transaction Success Rate Summary:** Daily success rates extracted using 'Issu. SUCC. RATE (%)' row, highlighting rates $\le 79\%$ in red.
-    * **3. ATM success rate ranking:** Ranked descending from top to bottom.
+    * **3. ATM Success Rate Ranking:** Ranked descending from top to bottom using uploaded source files.
     * **4. ATM decline contribution by participant:** Participant shares.
     * **5. Major ATM declined transactions:** Response code summaries.
     """)
 
-elif report_type == "1. ATM decline summery":
-  st.subheader(
-      "📊 1. ATM Decline Summary (Per Bank per Response Code, Excluding Gedaa)"
-  )
+elif report_type == "1. ATM Decline Summary":
+  st.subheader("📊 ATM Decline Summary")
   if combined_decline is not None:
     rc_col = combined_decline.columns[0]
-    # Filter out Gedaa column if present
+    # Filter out Gedaa column if present and ensure numeric parsing
     valid_cols = [
         c
         for c in combined_decline.columns
         if "gedaa" not in str(c).lower() and c != rc_col
     ]
 
-    # Group by Response Code and sum per bank column
-    summary_pivot = combined_decline.groupby(rc_col)[valid_cols].sum().reset_index()
+    for col in valid_cols:
+      combined_decline[col] = pd.to_numeric(
+          combined_decline[col], errors="coerce"
+      ).fillna(0)
+
+    summary_pivot = (
+        combined_decline.groupby(rc_col)[valid_cols].sum().reset_index()
+    )
 
 
-    # Styling function to highlight values > 100 in red
     def highlight_above_100(val):
       try:
         if float(val) > 100:
@@ -190,15 +193,15 @@ elif report_type == "1. ATM decline summery":
 
 
     st.dataframe(
-        summary_pivot.style.applymap(
-            highlight_above_100, subset=valid_cols
-        ),
+        summary_pivot.style.map(highlight_above_100, subset=valid_cols),
         use_container_width=True,
     )
 
     out_sum = io.BytesIO()
     with pd.ExcelWriter(out_sum, engine="openpyxl") as writer:
-      summary_pivot.to_excel(writer, sheet_name="ATM Decline Summary", index=False)
+      summary_pivot.to_excel(
+          writer, sheet_name="ATM Decline Summary", index=False
+      )
     st.download_button(
         "📥 Download ATM Decline Summary (.xlsx)",
         out_sum.getvalue(),
@@ -209,7 +212,8 @@ elif report_type == "1. ATM decline summery":
     st.info("👆 Please upload your daily ATM decline files at the top.")
 
 elif report_type == "2. ATM Transaction Success Rate Summary":
-  st.subheader("📈 2. ATM Transaction Success Rate Summary (Issu. SUCC. RATE (%))")
+  st.subheader("📈 ATM Transaction Success Rate Summary")
+  success_summary_df = None
   if uploaded_files:
     daily_success_frames = []
     for file in uploaded_files:
@@ -221,7 +225,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
             row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
             if "Issu. SUCC. RATE (%)" in row_str or "SUCC. RATE" in row_str:
               daily_success_frames.append(df_sheet.iloc[[idx]])
-      except Exception as e:
+      except Exception:
         pass
 
     if daily_success_frames:
@@ -239,7 +243,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
 
 
       st.dataframe(
-          success_summary_df.style.applymap(highlight_low_success),
+          success_summary_df.style.map(highlight_low_success),
           use_container_width=True,
       )
     else:
@@ -249,43 +253,51 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
   else:
     st.info("👆 Please upload your daily source report files at the top.")
 
-elif report_type == "3. ATM success rate ranking":
-  st.subheader(
-      "🏆 3. ATM Success Rate Ranking (Sorted from Highest to Lowest)"
-  )
-  success_file_rank = st.file_uploader(
-      "Upload ATM Success Rate Report for Ranking (.xlsx)",
-      type=["xlsx", "xls"],
-      key="ranking_file_3",
-  )
-  if success_file_rank is not None:
-    df_success = pd.read_excel(success_file_rank, sheet_name=0)
-    header_idx, avg_idx = None, None
-    for idx, row in df_success.iterrows():
-      row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
-      if "Bank/Date" in row_str or "Bank" in row_str:
-        header_idx = idx
-      if "Average" in row_str:
-        avg_idx = idx
+elif report_type == "3. ATM Success Rate Ranking":
+  st.subheader("🏆 ATM Success Rate Ranking")
+  if uploaded_files:
+    success_data = {}
+    for file in uploaded_files:
+      try:
+        xls = pd.ExcelFile(file)
+        for sheet_name in xls.sheet_names:
+          df_sheet = pd.read_excel(file, sheet_name=sheet_name)
+          header_idx, avg_idx = None, None
+          for idx, row in df_sheet.iterrows():
+            row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
+            if "Bank/Date" in row_str or "Bank" in row_str:
+              header_idx = idx
+            if "Average" in row_str or "Issu. SUCC. RATE (%)" in row_str:
+              avg_idx = idx
 
-    if header_idx is not None and avg_idx is not None:
-      cols = df_success.iloc[header_idx].tolist()
-      avg_row = df_success.iloc[avg_idx].tolist()
+          if header_idx is not None and avg_idx is not None:
+            cols = df_sheet.iloc[header_idx].tolist()
+            avg_row = df_sheet.iloc[avg_idx].tolist()
+            for c, v in zip(cols[1:], avg_row[1:]):
+              if pd.notna(c) and str(c).strip() not in [
+                  "Weighted Average",
+                  "nan",
+              ]:
+                bank_name = HEADER_MAPPING.get(
+                    str(c).strip().upper(), str(c).strip()
+                )
+                try:
+                  val = float(str(v).replace("%", ""))
+                  if val > 1:
+                    val = val / 100.0  # normalize percentage
+                  success_data.setdefault(bank_name, []).append(val)
+                except:
+                  pass
+      except Exception:
+        pass
 
-      success_data = []
-      for c, v in zip(cols[1:], avg_row[1:]):
-        if pd.notna(c) and str(c).strip() != "Weighted Average":
-          bank_name = HEADER_MAPPING.get(
-              str(c).strip().upper(), str(c).strip()
-          )
-          try:
-            rate = float(v)
-          except:
-            rate = 0.0
-          success_data.append({"Participant": bank_name, "Success rate": rate})
-
-      rank_df = pd.DataFrame(success_data)
-      # Sort explicitly from highest to lowest success rate
+    if success_data:
+      avg_success = {
+          bank: sum(rates) / len(rates) for bank, rates in success_data.items()
+      }
+      rank_df = pd.DataFrame(
+          list(avg_success.items()), columns=["Participant", "Success rate"]
+      )
       rank_df = rank_df.sort_values(
           by="Success rate", ascending=False
       ).reset_index(drop=True)
@@ -295,7 +307,7 @@ elif report_type == "3. ATM success rate ranking":
 
       display_rank = rank_df.copy()
       display_rank["Success rate"] = display_rank["Success rate"].apply(
-          lambda x: f"{x*100:.2f}%" if x <= 1 else f"{x:.2f}%"
+          lambda x: f"{x*100:.2f}%"
       )
 
       st.dataframe(display_rank, use_container_width=True)
@@ -311,8 +323,16 @@ elif report_type == "3. ATM success rate ranking":
           "ATM_Success_Rate_Ranking.xlsx",
           key="dl_rank_3",
       )
+    else:
+      st.warning(
+          "Could not compute rankings from the uploaded source files. Ensure"
+          " success rate rows are present."
+      )
   else:
-    st.info("Please upload your ATM Success Rate report to generate rankings.")
+    st.info(
+        "👆 Please upload your daily source report files at the top to generate"
+        " rankings automatically."
+    )
 
 elif report_type == "4. ATM decline contribution by participant":
   st.subheader("👤 4. ATM Decline Contribution by Participant")
