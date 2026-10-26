@@ -230,7 +230,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
     for file in uploaded_files:
       try:
         xls = pd.ExcelFile(file)
-        # Use exact date format from filename as requested (e.g. Oct 1,2026)
+        # Format date as requested: e.g. Oct 1,2026
         file_date = (
             file.name.split(".")[0]
             .replace("ATM Declined Transaction Report for", "")
@@ -240,27 +240,53 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
 
         for sheet_name in xls.sheet_names:
           df_sheet = pd.read_excel(file, sheet_name=sheet_name)
-          if len(df_sheet) > 35:
-            # Target Row 36 (index 35)
-            target_row = df_sheet.iloc[35]
+          target_row_series = None
+          for idx, row in df_sheet.iterrows():
+            row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
+            if (
+                "SUCC. RATE" in row_str.upper()
+                or "SUCCESS RATE" in row_str.upper()
+            ):
+              target_row_series = row
+              break
+
+          if target_row_series is not None:
+            header_idx = None
+            for h_idx in range(len(df_sheet)):
+              h_str = " ".join(
+                  [str(v) for v in df_sheet.iloc[h_idx].values if pd.notna(v)]
+              )
+              if "CBE" in h_str and "BOA" in h_str:
+                header_idx = h_idx
+                break
+
+            cols = (
+                df_sheet.iloc[header_idx].tolist()
+                if header_idx is not None
+                else df_sheet.columns.tolist()
+            )
+            vals = target_row_series.values.tolist()
+
             record = {"Bank/Date": file_date}
-
-            for col_idx, val in enumerate(target_row.values):
-              col_name = ""
-              for h_idx in range(min(6, len(df_sheet))):
-                h_val = str(df_sheet.iloc[h_idx, col_idx]).strip().upper()
-                if h_val in HEADER_MAPPING:
-                  col_name = h_val
-                  break
-
-              if not col_name and col_idx < len(df_sheet.columns):
-                col_name = str(df_sheet.columns[col_idx]).strip().upper()
-
-              if col_name in HEADER_MAPPING:
-                b_name = HEADER_MAPPING[col_name]
-                record[b_name] = val
-              elif "WEIGHTED" in col_name or "AVERAGE" in col_name:
-                record["Weighted Average"] = val
+            for c, val in zip(cols, vals):
+              c_str = str(c).strip().upper()
+              if c_str in HEADER_MAPPING:
+                b_name = HEADER_MAPPING[c_str]
+                try:
+                  num = float(str(val).replace("%", "").strip())
+                  if num > 1.0:
+                    num = num / 100.0
+                  record[b_name] = num
+                except:
+                  record[b_name] = None
+              elif "WEIGHTED" in c_str or "AVERAGE" in c_str:
+                try:
+                  num = float(str(val).replace("%", "").strip())
+                  if num > 1.0:
+                    num = num / 100.0
+                  record["Weighted Average"] = num
+                except:
+                  pass
 
             if len(record) > 1:
               success_rows.append(record)
@@ -272,16 +298,10 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       df_success = pd.DataFrame(success_rows)
       bank_cols = [c for c in df_success.columns if c != "Bank/Date"]
 
-      # Calculate Average row at the bottom using raw numeric values
+      # Calculate Average row at the bottom
       avg_dict = {"Bank/Date": "Average"}
       for col in bank_cols:
-        numeric_vals = pd.to_numeric(
-            df_success[col]
-            .astype(str)
-            .str.replace("%", "", regex=True)
-            .str.strip(),
-            errors="coerce",
-        )
+        numeric_vals = pd.to_numeric(df_success[col], errors="coerce")
         avg_dict[col] = numeric_vals.mean()
 
       df_success = pd.concat(
@@ -289,27 +309,23 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       )
 
 
-      # Color-coding & formatting rules:
+      # Color-coding rules:
       # 98.5% - 100% -> Green
       # 90% - 98% -> Yellow
       # 80% - 89% -> Light Yellow
       # <=79% -> Red
       def apply_success_styling(val):
         try:
-          clean_val = str(val).replace("%", "").strip()
-          num = float(clean_val)
-          if num <= 1.0 and num > 0:
-            normalized = num
-            pct_str = f"{num*100:.1f}%"
-          else:
-            normalized = num / 100.0
-            pct_str = f"{num:.1f}%" if "%" in str(val) else f"{num}%"
+          num = float(val)
+          if pd.isna(num):
+            return ""
+          pct_str = f"{num*100:.1f}%"
 
-          if normalized >= 0.985:
+          if num >= 0.985:
             return f"<span style='background-color: #2ecc71; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-          elif normalized >= 0.90:
+          elif num >= 0.90:
             return f"<span style='background-color: #f1c40f; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
-          elif normalized >= 0.80:
+          elif num >= 0.80:
             return f"<span style='background-color: #fcf3cf; color: black; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
           else:
             return f"<span style='background-color: #e74c3c; color: white; font-weight: bold; padding: 2px 4px; border-radius: 3px;'>{pct_str}</span>"
@@ -338,8 +354,8 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
       )
     else:
       st.warning(
-          "Could not locate row 36 in the uploaded files. Please check file"
-          " structure."
+          "Could not locate 'SUCC. RATE' rows in the uploaded files. Please"
+          " check file structure."
       )
   else:
     st.info("👆 Please upload your daily source report files at the top.")
