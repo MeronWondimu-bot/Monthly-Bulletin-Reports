@@ -101,8 +101,6 @@ def process_all_decline_files(files):
           sub_df = df_sheet.iloc[header_idx + 1 :].copy()
           rc_col = sub_df.columns[0]
           sub_df = sub_df.dropna(subset=[rc_col])
-
-          # Filter out unwanted label rows
           sub_df = sub_df[
               ~sub_df[rc_col]
               .astype(str)
@@ -125,8 +123,12 @@ if uploaded_files:
 # Report Selection Menu
 report_type = st.radio(
     "Report Selection",
-    ["1. ATM Decline Summary"],
+    [
+        "1. ATM Decline Summary",
+        "2. ATM Transaction Success Rate Summary",
+    ],
     label_visibility="collapsed",
+    horizontal=True,
 )
 
 st.markdown("---")
@@ -136,7 +138,6 @@ if report_type == "1. ATM Decline Summary":
   if combined_decline is not None:
     rc_col = combined_decline.columns[0]
 
-    # Filter out Gedaa / Gadaa entirely from columns and calculations
     valid_cols = []
     for c in combined_decline.columns:
       c_str = str(c).strip().upper()
@@ -161,10 +162,8 @@ if report_type == "1. ATM Decline Summary":
     )
     summary_pivot.rename(columns={rc_col: "RC"}, inplace=True)
 
-    # Re-calculate the Total column across the valid bank columns
     summary_pivot["Total"] = summary_pivot[valid_cols].sum(axis=1)
 
-    # Append TOTAL summary row at the bottom
     total_row = {"RC": "TOTAL"}
     for col in valid_cols + ["Total"]:
       total_row[col] = summary_pivot[col].sum()
@@ -207,3 +206,66 @@ if report_type == "1. ATM Decline Summary":
     )
   else:
     st.info("👆 Please upload your daily ATM decline files at the top.")
+
+elif report_type == "2. ATM Transaction Success Rate Summary":
+  st.subheader("📈 ATM Transaction Success Rate Summary")
+  if uploaded_files:
+    success_rows = []
+    for file in uploaded_files:
+      try:
+        xls = pd.ExcelFile(file)
+        for sheet_name in xls.sheet_names:
+          df_sheet = pd.read_excel(file, sheet_name=sheet_name)
+          for idx, row in df_sheet.iterrows():
+            row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
+            if "Issu. SUCC. RATE (%)" in row_str or "SUCC. RATE" in row_str:
+              # Extract this row and use sheet name or file name as date indicator
+              row_data = df_sheet.iloc[idx].to_dict()
+              row_data["Date"] = sheet_name
+              success_rows.append(row_data)
+      except Exception:
+        pass
+
+    if success_rows:
+      df_success_summary = pd.DataFrame(success_rows)
+
+      # Highlight values <= 79% (or 0.79) in red
+      def highlight_success_rate(val):
+        try:
+          clean_val = str(val).replace("%", "").strip()
+          num = float(clean_val)
+          if num <= 0.79 or num <= 79:
+            return f"<span style='color: red; font-weight: bold;'>{val}</span>"
+        except:
+          pass
+        return str(val)
+
+      display_success = df_success_summary.copy()
+      for col in display_success.columns:
+        if col != "Date":
+          display_success[col] = display_success[col].apply(
+              highlight_success_rate
+          )
+
+      st.markdown(
+          display_success.to_html(escape=False, index=False),
+          unsafe_allow_html=True,
+      )
+
+      out_succ = io.BytesIO()
+      with pd.ExcelWriter(out_succ, engine="openpyxl") as writer:
+        df_success_summary.to_excel(
+            writer, sheet_name="Success Rate Summary", index=False
+        )
+      st.download_button(
+          "📥 Download Success Rate Summary (.xlsx)",
+          out_succ.getvalue(),
+          "ATM_Success_Rate_Summary.xlsx",
+          key="dl_success_sum",
+      )
+    else:
+      st.warning(
+          "Could not locate 'Issu. SUCC. RATE (%)' rows in the uploaded files."
+      )
+  else:
+    st.info("👆 Please upload your daily source report files at the top.")
