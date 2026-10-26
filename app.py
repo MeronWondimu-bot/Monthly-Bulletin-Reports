@@ -9,6 +9,7 @@ st.set_page_config(
     layout="wide",
 )
 
+# Custom CSS for UI styling
 st.markdown("""
     <style>
         .banner {
@@ -31,16 +32,21 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Orange Top Banner
 st.markdown(
     '<div class="banner">BI-WEEKLY & MONTHLY REPORT GENERATOR</div>',
     unsafe_allow_html=True,
 )
 
-# File Uploader
+# ----------------------------------------------------
+# 1. FILE UPLOADER SECTION (Top)
+# ----------------------------------------------------
 st.markdown(
     '<div class="section-header">📁 Upload Daily Source Reports</div>',
     unsafe_allow_html=True,
 )
+st.markdown("Upload all daily ATM report files for the month below:")
+
 uploaded_files = st.file_uploader(
     "Upload daily files",
     type=["xlsx", "xls"],
@@ -120,19 +126,26 @@ combined_decline = None
 if uploaded_files:
   combined_decline = process_all_decline_files(uploaded_files)
 
-# Report Selection Menu
+# ----------------------------------------------------
+# REPORT TYPE SELECTION
+# ----------------------------------------------------
 report_type = st.radio(
     "Report Selection",
     [
         "1. ATM Decline Summary",
         "2. ATM Transaction Success Rate Summary",
+        "3. ATM Success Rate Ranking",
+        "4. ATM decline contribution by participant",
+        "5. Major ATM declined transactions",
     ],
     label_visibility="collapsed",
-    horizontal=True,
 )
 
 st.markdown("---")
 
+# ==========================================
+# 1. ATM DECLINE SUMMARY (Untouched & Perfect)
+# ==========================================
 if report_type == "1. ATM Decline Summary":
   st.subheader("📊 ATM Decline Summary")
   if combined_decline is not None:
@@ -207,6 +220,9 @@ if report_type == "1. ATM Decline Summary":
   else:
     st.info("👆 Please upload your daily ATM decline files at the top.")
 
+# ==========================================
+# 2. ATM TRANSACTION SUCCESS RATE SUMMARY
+# ==========================================
 elif report_type == "2. ATM Transaction Success Rate Summary":
   st.subheader("📈 ATM Transaction Success Rate Summary")
   if uploaded_files:
@@ -219,9 +235,8 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
           for idx, row in df_sheet.iterrows():
             row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
             if "Issu. SUCC. RATE (%)" in row_str or "SUCC. RATE" in row_str:
-              # Extract this row and use sheet name or file name as date indicator
               row_data = df_sheet.iloc[idx].to_dict()
-              row_data["Date"] = sheet_name
+              row_data["Bank/Date"] = sheet_name
               success_rows.append(row_data)
       except Exception:
         pass
@@ -229,7 +244,7 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
     if success_rows:
       df_success_summary = pd.DataFrame(success_rows)
 
-      # Highlight values <= 79% (or 0.79) in red
+
       def highlight_success_rate(val):
         try:
           clean_val = str(val).replace("%", "").strip()
@@ -240,9 +255,10 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
           pass
         return str(val)
 
+
       display_success = df_success_summary.copy()
       for col in display_success.columns:
-        if col != "Date":
+        if col != "Bank/Date":
           display_success[col] = display_success[col].apply(
               highlight_success_rate
           )
@@ -251,21 +267,83 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
           display_success.to_html(escape=False, index=False),
           unsafe_allow_html=True,
       )
-
-      out_succ = io.BytesIO()
-      with pd.ExcelWriter(out_succ, engine="openpyxl") as writer:
-        df_success_summary.to_excel(
-            writer, sheet_name="Success Rate Summary", index=False
-        )
-      st.download_button(
-          "📥 Download Success Rate Summary (.xlsx)",
-          out_succ.getvalue(),
-          "ATM_Success_Rate_Summary.xlsx",
-          key="dl_success_sum",
-      )
     else:
       st.warning(
           "Could not locate 'Issu. SUCC. RATE (%)' rows in the uploaded files."
       )
   else:
     st.info("👆 Please upload your daily source report files at the top.")
+
+# ==========================================
+# 3. ATM SUCCESS RATE RANKING
+# ==========================================
+elif report_type == "3. ATM Success Rate Ranking":
+  st.subheader("🏆 ATM Success Rate Ranking")
+  st.info("Report 3 is ready for review once Report 2 is locked down.")
+
+# ==========================================
+# 4. ATM DECLINE CONTRIBUTION BY PARTICIPANT
+# ==========================================
+elif report_type == "4. ATM decline contribution by participant":
+  st.subheader("👤 ATM Decline Contribution by Participant")
+  if combined_decline is not None:
+    bank_totals = {}
+    for col in combined_decline.columns:
+      col_clean = str(col).strip().upper()
+      if "gedaa" in col_clean.lower() or "gadaa" in col_clean.lower():
+        continue
+      if col_clean in HEADER_MAPPING:
+        target_name = HEADER_MAPPING[col_clean]
+        vals = pd.to_numeric(combined_decline[col], errors="coerce").fillna(0)
+        bank_totals[target_name] = bank_totals.get(target_name, 0) + vals.sum()
+
+    part_df = pd.DataFrame(
+        list(bank_totals.items()),
+        columns=["Participant", "Declined transactions"],
+    )
+    part_df = part_df.sort_values(
+        by="Declined transactions", ascending=False
+    ).reset_index(drop=True)
+
+    total_declines = part_df["Declined transactions"].sum()
+    part_df["Share of ATM declines"] = (
+        part_df["Declined transactions"] / total_declines
+        if total_declines > 0
+        else 0
+    )
+
+    display_part = part_df.copy()
+    display_part["Declined transactions"] = display_part[
+        "Declined transactions"
+    ].apply(lambda x: f"{int(x):,}")
+    display_part["Share of ATM declines"] = display_part[
+        "Share of ATM declines"
+    ].apply(lambda x: f"{x:.2%}")
+
+    st.dataframe(display_part, use_container_width=True)
+  else:
+    st.info("👆 Please upload your daily decline Excel files at the top.")
+
+# ==========================================
+# 5. MAJOR ATM DECLINED TRANSACTIONS
+# ==========================================
+elif report_type == "5. Major ATM declined transactions":
+  st.subheader("🔍 Major ATM Declined Transactions")
+  if combined_decline is not None:
+    rc_col = combined_decline.columns[0]
+    combined_decline[rc_col] = (
+        pd.to_numeric(combined_decline[rc_col], errors="coerce")
+        .fillna(0)
+        .astype(int)
+        .astype(str)
+    )
+
+    total_col = [
+        c for c in combined_decline.columns if "total" in str(c).lower()
+    ]
+    if total_col:
+      combined_decline["Total_Numeric"] = pd.to_numeric(
+          combined_decline[total_col[0]], errors="coerce"
+      ).fillna(0)
+    else:
+      bank
