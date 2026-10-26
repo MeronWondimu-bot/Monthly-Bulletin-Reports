@@ -56,7 +56,7 @@ uploaded_files = st.file_uploader(
 
 st.markdown("---")
 
-# Header Mapping for Clean Bank Names
+# Header Mapping for Clean Bank Names (Gedaa excluded entirely)
 HEADER_MAPPING = {
     "CBE": "CBE",
     "BOA": "BOA",
@@ -155,9 +155,9 @@ st.markdown("---")
 if report_type == "Home / Overview":
   st.subheader("Welcome to the EthSwitch Reporting Hub")
   st.markdown("""
-    * **1. ATM Decline Summary:** Daily responses aggregated per bank (excluding Gedaa, highlighted if > 100, with integer values and TOTAL row).
-    * **2. ATM Transaction Success Rate Summary:** Daily success rates extracted using 'Issu. SUCC. RATE (%)' row, highlighting rates $\le 79\%$ in red.
-    * **3. ATM Success Rate Ranking:** Ranked descending from top to bottom using uploaded source files.
+    * **1. ATM Decline Summary:** Daily responses aggregated per bank (Gedaa removed, highlighted if > 100, with clean integer values and TOTAL row).
+    * **2. ATM Transaction Success Rate Summary:** Daily success rates with label rows cleaned.
+    * **3. ATM Success Rate Ranking:** Ranked descending from top to bottom automatically from uploaded files.
     * **4. ATM decline contribution by participant:** Participant shares.
     * **5. Major ATM declined transactions:** Response code summaries.
     """)
@@ -166,11 +166,13 @@ elif report_type == "1. ATM Decline Summary":
   st.subheader("📊 ATM Decline Summary")
   if combined_decline is not None:
     rc_col = combined_decline.columns[0]
-    # Filter out Gedaa column if present and ensure numeric parsing
+    # Filter out Gedaa and any column containing 'gedaa' or 'gadaa'
     valid_cols = [
         c
         for c in combined_decline.columns
-        if "gedaa" not in str(c).lower() and c != rc_col
+        if "gedaa" not in str(c).lower()
+        and "gadaa" not in str(c).lower()
+        and c != rc_col
     ]
 
     for col in valid_cols:
@@ -182,9 +184,15 @@ elif report_type == "1. ATM Decline Summary":
         combined_decline.groupby(rc_col)[valid_cols].sum().reset_index()
     )
 
-    # Append TOTAL row at the bottom
-    total_row = {rc_col: "TOTAL"}
-    for col in valid_cols:
+    # Rename first column cleanly to remove clutter
+    summary_pivot.rename(columns={rc_col: "Response Code"}, inplace=True)
+    valid_cols_renamed = [
+        c for c in summary_pivot.columns if c != "Response Code"
+    ]
+
+    # Append TOTAL row at the bottom (excluding Gedaa explicitly)
+    total_row = {"Response Code": "TOTAL"}
+    for col in valid_cols_renamed:
       total_row[col] = summary_pivot[col].sum()
 
     summary_pivot = pd.concat(
@@ -192,7 +200,6 @@ elif report_type == "1. ATM Decline Summary":
     )
 
 
-    # Format values as integers and highlight values > 100 in red
     def format_and_highlight(val):
       try:
         num = float(val)
@@ -205,7 +212,7 @@ elif report_type == "1. ATM Decline Summary":
 
 
     display_df = summary_pivot.copy()
-    for col in valid_cols:
+    for col in valid_cols_renamed:
       display_df[col] = display_df[col].apply(format_and_highlight)
 
     st.markdown(
@@ -238,7 +245,10 @@ elif report_type == "2. ATM Transaction Success Rate Summary":
           for idx, row in df_sheet.iterrows():
             row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
             if "Issu. SUCC. RATE (%)" in row_str or "SUCC. RATE" in row_str:
-              daily_success_frames.append(df_sheet.iloc[[idx]])
+              # Filter out rows that are just header label rows if desired, or keep data rows
+              sub_s = df_sheet.iloc[[idx]].copy()
+              # Drop text label column if it matches the label row
+              daily_success_frames.append(sub_s)
       except Exception:
         pass
 
@@ -316,158 +326,3 @@ elif report_type == "3. ATM Success Rate Ranking":
           by="Success rate", ascending=False
       ).reset_index(drop=True)
       rank_df.index += 1
-      rank_df["Rank"] = rank_df.index
-      rank_df = rank_df[["Rank", "Participant", "Success rate"]]
-
-      display_rank = rank_df.copy()
-      display_rank["Success rate"] = display_rank["Success rate"].apply(
-          lambda x: f"{x*100:.2f}%"
-      )
-
-      st.dataframe(display_rank, use_container_width=True)
-
-      out_rank = io.BytesIO()
-      with pd.ExcelWriter(out_rank, engine="openpyxl") as writer:
-        rank_df.to_excel(
-            writer, sheet_name="Success Rate Ranking", index=False
-        )
-      st.download_button(
-          "📥 Download Success Rate Ranking (.xlsx)",
-          out_rank.getvalue(),
-          "ATM_Success_Rate_Ranking.xlsx",
-          key="dl_rank_3",
-      )
-    else:
-      st.warning(
-          "Could not compute rankings from the uploaded source files. Ensure"
-          " success rate rows are present."
-      )
-  else:
-    st.info(
-        "👆 Please upload your daily source report files at the top to generate"
-        " rankings automatically."
-    )
-
-elif report_type == "4. ATM decline contribution by participant":
-  st.subheader("👤 4. ATM Decline Contribution by Participant")
-  if combined_decline is not None:
-    bank_totals = {}
-    for col in combined_decline.columns:
-      col_clean = str(col).strip().upper()
-      if col_clean in HEADER_MAPPING:
-        target_name = HEADER_MAPPING[col_clean]
-        vals = pd.to_numeric(combined_decline[col], errors="coerce").fillna(0)
-        bank_totals[target_name] = bank_totals.get(target_name, 0) + vals.sum()
-
-    part_df = pd.DataFrame(
-        list(bank_totals.items()),
-        columns=["Participant", "Declined transactions"],
-    )
-    part_df = part_df.sort_values(
-        by="Declined transactions", ascending=False
-    ).reset_index(drop=True)
-
-    total_declines = part_df["Declined transactions"].sum()
-    part_df["Share of ATM declines"] = (
-        part_df["Declined transactions"] / total_declines
-        if total_declines > 0
-        else 0
-    )
-
-    display_part = part_df.copy()
-    display_part["Declined transactions"] = display_part[
-        "Declined transactions"
-    ].apply(lambda x: f"{int(x):,}")
-    display_part["Share of ATM declines"] = display_part[
-        "Share of ATM declines"
-    ].apply(lambda x: f"{x:.2%}")
-
-    st.dataframe(display_part, use_container_width=True)
-
-    out_part = io.BytesIO()
-    with pd.ExcelWriter(out_part, engine="openpyxl") as writer:
-      part_df.to_excel(
-          writer, sheet_name="Participant Contribution", index=False
-      )
-    st.download_button(
-        "📥 Download Participant Contribution Report (.xlsx)",
-        out_part.getvalue(),
-        "Decline_Contribution_By_Participant.xlsx",
-        key="dl_part_4",
-    )
-  else:
-    st.info(
-        "👆 Please upload your daily decline Excel files at the top to view"
-        " participant contributions."
-    )
-
-elif report_type == "5. Major ATM declined transactions":
-  st.subheader("🔍 5. Major ATM Declined Transactions (Response Codes)")
-  if combined_decline is not None:
-    rc_col = combined_decline.columns[0]
-    combined_decline[rc_col] = (
-        pd.to_numeric(combined_decline[rc_col], errors="coerce")
-        .fillna(0)
-        .astype(int)
-        .astype(str)
-    )
-
-    total_col = [
-        c for c in combined_decline.columns if "total" in str(c).lower()
-    ]
-    if total_col:
-      combined_decline["Total_Numeric"] = pd.to_numeric(
-          combined_decline[total_col[0]], errors="coerce"
-      ).fillna(0)
-    else:
-      bank_cols = [
-          c
-          for c in combined_decline.columns
-          if c != rc_col and "gedaa" not in str(c).lower()
-      ]
-      combined_decline["Total_Numeric"] = (
-          combined_decline[bank_cols]
-          .apply(pd.to_numeric, errors="coerce")
-          .fillna(0)
-          .sum(axis=1)
-      )
-
-    rc_summary = (
-        combined_decline.groupby(rc_col)["Total_Numeric"].sum().reset_index()
-    )
-    rc_summary.columns = ["Response code", "Declined transactions"]
-    rc_summary = rc_summary.sort_values(
-        by="Declined transactions", ascending=False
-    ).reset_index(drop=True)
-
-    total_declines_rc = rc_summary["Declined transactions"].sum()
-    rc_summary["Share of ATM declines"] = (
-        rc_summary["Declined transactions"] / total_declines_rc
-        if total_declines_rc > 0
-        else 0
-    )
-
-    display_rc = rc_summary.copy()
-    display_rc["Declined transactions"] = display_rc[
-        "Declined transactions"
-    ].apply(lambda x: f"{int(x):,}")
-    display_rc["Share of ATM declines"] = display_rc[
-        "Share of ATM declines"
-    ].apply(lambda x: f"{x:.2%}")
-
-    st.dataframe(display_rc, use_container_width=True)
-
-    out_rc = io.BytesIO()
-    with pd.ExcelWriter(out_rc, engine="openpyxl") as writer:
-      rc_summary.to_excel(writer, sheet_name="Major Causes", index=False)
-    st.download_button(
-        "📥 Download Major Causes Report (.xlsx)",
-        out_rc.getvalue(),
-        "Major_Causes_Of_Declines.xlsx",
-        key="dl_rc_5",
-    )
-  else:
-    st.info(
-        "👆 Please upload your daily decline Excel files at the top to view"
-        " major declined transactions."
-    )
