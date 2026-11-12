@@ -45,7 +45,6 @@ def load_fi_contacts():
     except Exception as e:
         st.warning(f"Could not load FI's contacts.xlsx: {e}")
 
-    # Fallback default data
     return pd.DataFrame([
         {"FI Name": "Abyssinia", "Category": "CEO", "Name": "Bekalu Zeleke", "Position": "CEO", "Phone/Office Number": "09-30-07-75-57", "Email Address": "ceo@bankofabyssinia.com"},
         {"FI Name": "Addis", "Category": "CEO", "Name": "Hailu Alemu", "Position": "CEO", "Phone/Office Number": "011-5-54-97-74", "Email Address": "Hailu@addisbanksc.com"},
@@ -57,7 +56,6 @@ def load_fi_contacts():
 @st.cache_data
 def load_account_managers():
     try:
-        # Check possible filename variations in root
         filename = "Account Manager with FI's.xlsx"
         if not pd.io.common.file_exists(filename):
             filename = "Account Manager  with FI's.xlsx"
@@ -74,7 +72,6 @@ def load_account_managers():
     except Exception as e:
         st.warning(f"Could not load Account Manager file: {e}")
 
-    # Fallback default data matching your uploaded spreadsheet
     return pd.DataFrame([
         {"Account Manager": "Amare Eyase", "Bank/MFI Name": "ABAY"},
         {"Account Manager": "Amare Eyase", "Bank/MFI Name": "AWASH"},
@@ -330,3 +327,27 @@ elif cat_selection == "FI's Contacts":
             
             submitted_contact = st.form_submit_button("Save New Contact")
             if submitted_contact and new_fi_name and new_name:
+                new_row = pd.DataFrame([{
+                    "FI Name": new_fi_name.strip(),
+                    "Category": new_position.strip(),
+                    "Name": new_name.strip(),
+                    "Position": new_position.strip(),
+                    "Phone/Office Number": new_phone.strip(),
+                    "Email Address": new_email.strip()
+                }])
+                st.session_state.fi_df = pd.concat([st.session_state.fi_df, new_row], ignore_index=True)
+                st.success(f"Successfully added contact for **{new_fi_name}**!")
+
+    st.markdown("### Edit Contacts Below")
+
+    df_full = st.session_state.fi_df.copy()
+    if contact_tier == "CEO":
+        mask = df_full["Category"].str.contains("CEO", case=False, na=False)
+    elif contact_tier == "CIO":
+        mask = df_full["Category"].str.contains("CIO", case=False, na=False)
+    elif contact_tier == "Directors":
+        mask = df_full["Category"].str.contains("Director", case=False, na=False)
+    else:
+        mask = pd.Series([True] * len(df_full))
+
+    df_tier = df
