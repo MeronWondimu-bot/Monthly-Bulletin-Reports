@@ -55,10 +55,7 @@ with col3:
     st.markdown("<h3 style='text-align: right;'>EthioPay</h3>", unsafe_allow_html=True)
 
 st.markdown("""
-    <div class="hero-banner">
-        <div class="hero-title">Performance Reporting & CRM Hub</div>
-        <div class="hero-subtitle">Upload your daily SmartVista source reports and manage FI Contacts, Account Managers, and Issues</div>
-    </div>
+  
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
