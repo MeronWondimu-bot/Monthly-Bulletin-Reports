@@ -169,4 +169,85 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
                         for idx, row in df_sheet.iterrows():
                             row_vals_str = " ".join([str(v) for v in row.values if pd.notna(v)]).upper()
                             if "SUCC" in row_vals_str and "RATE" in row_vals_str:
-                                target_row
+                                target_row_series = row
+                                break
+                        if target_row_series is not None:
+                            header_idx = None
+                            for h in range(len(df_sheet)):
+                                h_str = " ".join([str(v) for v in df_sheet.iloc[h].values if pd.notna(v)]).upper()
+                                if "CBE" in h_str:
+                                    header_idx = h
+                                    break
+                            cols = df_sheet.iloc[header_idx].tolist() if header_idx is not None else df_sheet.columns.tolist()
+                            vals = target_row_series.values.tolist()
+
+                            record = {"Bank/Date": file_date}
+                            for c, val in zip(cols, vals):
+                                c_str = re.sub(r'\s+', ' ', str(c).strip().upper())
+                                if c_str in HEADER_MAPPING:
+                                    try: record[HEADER_MAPPING[c_str]] = float(str(val).replace("%", "").strip())
+                                    except: record[HEADER_MAPPING[c_str]] = None
+                            if len(vals) > 25:
+                                try: record["Weighted Average"] = float(str(vals[25]).replace("%", "").strip())
+                                except: pass
+                            if len(record) > 1:
+                                success_rows.append(record)
+                                break
+                except Exception as e:
+                    st.error(f"Error reading {file.name}: {e}")
+
+            if success_rows:
+                df_success = pd.DataFrame(success_rows)
+                bank_cols = [c for c in df_success.columns if c not in ["Bank/Date", "Weighted Average"]]
+                ordered_cols = ["Bank/Date"] + bank_cols + (["Weighted Average"] if "Weighted Average" in df_success.columns else [])
+                df_success = df_success[[c for c in ordered_cols if c in df_success.columns]]
+
+                avg_dict = {"Bank/Date": "Average"}
+                for col in [c for c in df_success.columns if c != "Bank/Date"]:
+                    avg_dict[col] = pd.to_numeric(df_success[col], errors="coerce").mean()
+                df_success = pd.concat([df_success, pd.DataFrame([avg_dict])], ignore_index=True)
+
+                st.dataframe(df_success, use_container_width=True)
+            else:
+                st.warning("Could not locate 'SUCC. RATE' rows in the uploaded files.")
+        else:
+            st.info("👆 Please upload your daily source report files at the top.")
+
+    # Report 3
+    elif report_type == "3. ATM Success Rate Ranking":
+        st.subheader("🏆 ATM Success Rate Ranking")
+        st.info("Report 3 is ready for review once Report 2 is locked down.")
+
+    # Report 4
+    elif report_type == "4. ATM decline contribution by participant":
+        st.subheader("👤 ATM Decline Contribution by Participant")
+        if combined_decline is not None:
+            bank_totals = {}
+            for col in combined_decline.columns:
+                col_clean = str(col).strip().upper()
+                if "GEDAA" not in col_clean and "GADAA" not in col_clean and col_clean in HEADER_MAPPING:
+                    bank_totals[HEADER_MAPPING[col_clean]] = bank_totals.get(HEADER_MAPPING[col_clean], 0) + pd.to_numeric(combined_decline[col], errors="coerce").fillna(0).sum()
+            part_df = pd.DataFrame(list(bank_totals.items()), columns=["Participant", "Declined transactions"]).sort_values(by="Declined transactions", ascending=False).reset_index(drop=True)
+            st.dataframe(part_df, use_container_width=True)
+        else:
+            st.info("👆 Please upload your daily decline Excel files at the top.")
+
+    # Report 5
+    elif report_type == "5. Major ATM declined transactions":
+        st.subheader("🔍 Major ATM Declined Transactions")
+        st.info("Major ATM declined transactions module active.")
+
+# ====================================================
+# 2. FI's CONTACTS (CEO, CIO, Directors)
+# ====================================================
+elif cat_selection == "FI's Contacts":
+    st.subheader("📇 FI's Contacts")
+    
+    contact_tier = st.selectbox(
+        "Select Management Tier",
+        ["CEO", "CIO", "Directors"]
+    )
+    st.markdown("---")
+
+    @st.cache_data
+    def load_fi_contacts():
