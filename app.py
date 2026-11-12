@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# Custom CSS for modern pill/button navigation styling
+# Custom CSS for UI styling
 st.markdown("""
     <style>
         .main-title {
@@ -20,37 +20,7 @@ st.markdown("""
             font-weight: 800;
             color: #d35400;
             letter-spacing: 1px;
-        }
-        .hero-banner {
-            background: linear-gradient(0deg, rgba(249,235,221,0.5) 0%, rgba(255,255,255,1) 100%);
-            border: 1px solid #f9ebdd;
-            padding: 25px;
-            border-radius: 8px;
-            text-align: center;
-            margin-bottom: 25px;
-        }
-        .hero-title {
-            font-size: 22px;
-            font-weight: 700;
-            color: #d35400;
-            text-transform: uppercase;
-            margin-bottom: 5px;
-        }
-        .hero-subtitle {
-            font-size: 14px;
-            color: #666;
-        }
-        div.row-widget.stRadio > div {
-            flex-direction: row;
-            gap: 12px;
-        }
-        div.row-widget.stRadio > div > label {
-            background-color: #f8f9fa;
-            border: 1px solid #ddd;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-weight: 600;
-            color: #2c3e50;
+            margin-bottom: 20px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -66,27 +36,19 @@ with col2:
 with col3:
     st.markdown("<h3 style='text-align: right;'>EthioPay</h3>", unsafe_allow_html=True)
 
-st.markdown("""
-    <div class="hero-banner">
-        <div class="hero-title">Performance Reporting & CRM Hub</div>
-        <div class="hero-subtitle">Upload your daily SmartVista source reports and manage FI Contacts, Account Managers, and Issues</div>
-    </div>
-""", unsafe_allow_html=True)
+st.markdown("---")
 
 # ----------------------------------------------------
-# CRM OVERALL TASKS
+# CRM OVERALL TASKS (CLEAN DROPDOWN SELECTOR)
 # ----------------------------------------------------
-st.markdown("##### **CRM OVERALL TASKS**")
-cat_selection = st.radio(
+cat_selection = st.selectbox(
     "CRM Overall Tasks",
     [
         "Bi- weekly and Monthly performance reports",
         "FI's Contacts",
         "Account_Managers",
         "Issue_Tracking"
-    ],
-    horizontal=True,
-    label_visibility="collapsed"
+    ]
 )
 
 st.markdown("---")
@@ -103,7 +65,7 @@ HEADER_MAPPING = {
 # 1. BI-WEEKLY AND MONTHLY PERFORMANCE REPORTS
 # ====================================================
 if cat_selection == "Bi- weekly and Monthly performance reports":
-    st.markdown("##### **UPLOAD DAILY SOURCE REPORTS**")
+    st.markdown("**UPLOAD DAILY SOURCE REPORTS**")
     uploaded_files = st.file_uploader(
         "Upload all daily ATM report files for the month below:",
         type=["xlsx", "xls"],
@@ -111,8 +73,7 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
     )
     st.markdown("---")
 
-    st.markdown("##### **REPORT TYPE**")
-    report_type = st.radio(
+    report_type = st.selectbox(
         "Select Report Type",
         [
             "1. ATM Decline Summary",
@@ -120,9 +81,7 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
             "3. ATM Success Rate Ranking",
             "4. ATM decline contribution by participant",
             "5. Major ATM declined transactions",
-        ],
-        horizontal=True,
-        label_visibility="collapsed"
+        ]
     )
     st.markdown("---")
 
@@ -284,10 +243,9 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
 elif cat_selection == "FI's Contacts":
     st.subheader("📇 FI's Contacts")
     
-    contact_tier = st.radio(
+    contact_tier = st.selectbox(
         "Select Management Tier",
-        ["CEO", "CIO", "Directors"],
-        horizontal=True
+        ["CEO", "CIO", "Directors"]
     )
     st.markdown("---")
 
@@ -331,65 +289,4 @@ elif cat_selection == "Account_Managers":
     st.subheader("📋 Account Managers List")
     if "am_df" not in st.session_state:
         st.session_state.am_df = pd.DataFrame([
-            {"Bank / FI Name": "Abyssinia Bank", "Account Manager": "Abebe Kebede", "Phone": "0911000001", "Email": "abebe@ethswitch.com", "Tier": "Tier 1"},
-            {"Bank / FI Name": "Awash Bank", "Account Manager": "Tigist Mamo", "Phone": "0911000002", "Email": "tigist@ethswitch.com", "Tier": "Tier 1"},
-        ])
-    st.dataframe(st.session_state.am_df, use_container_width=True, hide_index=True)
-
-# ====================================================
-# 4. ISSUE_TRACKING (Bank issue & Internal issue)
-# ====================================================
-elif cat_selection == "Issue_Tracking":
-    st.subheader("🛠️ Issue Tracking List")
-    issue_sub = st.radio(
-        "Issue Sub-Category",
-        ["1. Bank issue", "2. Internal issue"],
-        horizontal=True
-    )
-    st.markdown("---")
-
-    DEPARTMENTS = [
-        "Application", "Digital", "Network", "System", "Shared Service",
-        "Settlement and Reconciliation", "PIN and Card Department",
-        "Security", "Dispute and Fraud", "Database"
-    ]
-
-    if "issues_df" not in st.session_state:
-        st.session_state.issues_df = pd.DataFrame(columns=[
-            "Issue ID", "Type", "Date Logged", "Entity / Department", "Severity", "Description", "Status"
-        ])
-
-    with st.expander(f"➕ Log New {issue_sub}", expanded=True):
-        with st.form(f"form_{issue_sub}", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                entity_name = st.text_input("Bank / FI Name" if "Bank" in issue_sub else "Internal Department", placeholder="e.g., Dashen Bank or Network Team")
-                dept = st.selectbox("Assigned Department", DEPARTMENTS)
-            with c2:
-                severity = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
-                status = st.selectbox("Status", ["Open", "In Progress", "Resolved", "Closed"])
-            with c3:
-                log_date = st.date_input("Date Logged", value=date.today())
-            
-            description = st.text_area("Issue Description", placeholder="Describe the problem...")
-            submitted = st.form_submit_button("Submit Issue")
-            
-            if submitted and entity_name and description:
-                issue_id = f"ISS-{len(st.session_state.issues_df) + 1:03d}"
-                new_row = pd.DataFrame([{
-                    "Issue ID": issue_id,
-                    "Type": issue_sub,
-                    "Date Logged": str(log_date),
-                    "Entity / Department": entity_name.strip(),
-                    "Severity": severity,
-                    "Description": description.strip(),
-                    "Status": status
-                }])
-                st.session_state.issues_df = pd.concat([st.session_state.issues_df, new_row], ignore_index=True)
-                st.success(f"Logged {issue_sub} **{issue_id}** successfully!")
-
-    st.divider()
-    st.subheader(f"📋 {issue_sub} List")
-    
-    filtered_issues = st.session_state.issues_df[st.session_state.issues_df["Type"] == issue_sub]
-    st.dataframe(filtered_issues, use_container_width=True, hide_index=True)
+            {"Bank / FI Name": "Abyssinia Bank", "Account Manager": "Abebe Kebede", "Phone": "0911000001", "
