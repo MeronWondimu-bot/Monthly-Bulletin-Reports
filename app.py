@@ -119,7 +119,9 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
     )
     st.markdown("---")
 
-    report_type = st.selectbox(
+    # Fully visible radio selector listing all 5 report types explicitly
+    st.markdown("**SELECT REPORT TYPE**")
+    report_type = st.radio(
         "Select Report Type",
         [
             "1. ATM Decline Summary",
@@ -127,7 +129,8 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
             "3. ATM Success Rate Ranking",
             "4. ATM decline contribution by participant",
             "5. Major ATM declined transactions",
-        ]
+        ],
+        label_visibility="collapsed"
     )
     st.markdown("---")
 
@@ -219,4 +222,97 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
             if success_rows:
                 df_success = pd.DataFrame(success_rows)
                 bank_cols = [c for c in df_success.columns if c not in ["Bank/Date", "Weighted Average"]]
-                ordered_cols = ["Bank/Date"]
+                ordered_cols = ["Bank/Date"] + bank_cols + (["Weighted Average"] if "Weighted Average" in df_success.columns else [])
+                df_success = df_success[[c for c in ordered_cols if c in df_success.columns]]
+
+                avg_dict = {"Bank/Date": "Average"}
+                for col in [c for c in df_success.columns if c != "Bank/Date"]:
+                    avg_dict[col] = pd.to_numeric(df_success[col], errors="coerce").mean()
+                df_success = pd.concat([df_success, pd.DataFrame([avg_dict])], ignore_index=True)
+
+                st.dataframe(df_success, use_container_width=True)
+            else:
+                st.warning("Could not locate 'SUCC. RATE' rows in the uploaded files.")
+        else:
+            st.info("👆 Please upload your daily source report files at the top.")
+
+    # Report 3
+    elif report_type == "3. ATM Success Rate Ranking":
+        st.subheader("🏆 ATM Success Rate Ranking")
+        st.info("Report 3 is ready for review once Report 2 is locked down.")
+
+    # Report 4
+    elif report_type == "4. ATM decline contribution by participant":
+        st.subheader("👤 ATM Decline Contribution by Participant")
+        if combined_decline is not None:
+            bank_totals = {}
+            for col in combined_decline.columns:
+                col_clean = str(col).strip().upper()
+                if "GEDAA" not in col_clean and "GADAA" not in col_clean and col_clean in HEADER_MAPPING:
+                    bank_totals[HEADER_MAPPING[col_clean]] = bank_totals.get(HEADER_MAPPING[col_clean], 0) + pd.to_numeric(combined_decline[col], errors="coerce").fillna(0).sum()
+            part_df = pd.DataFrame(list(bank_totals.items()), columns=["Participant", "Declined transactions"]).sort_values(by="Declined transactions", ascending=False).reset_index(drop=True)
+            st.dataframe(part_df, use_container_width=True)
+        else:
+            st.info("👆 Please upload your daily decline Excel files at the top.")
+
+    # Report 5
+    elif report_type == "5. Major ATM declined transactions":
+        st.subheader("🔍 Major ATM Declined Transactions")
+        st.info("Major ATM declined transactions module active.")
+
+# ====================================================
+# 2. FI'S CONTACTS (CEO, CIO, Directors)
+# ====================================================
+elif cat_selection == "FI's Contacts":
+    st.subheader("📇 FI's Contacts")
+    
+    contact_tier = st.selectbox(
+        "Select Management Tier",
+        ["CEO", "CIO", "Directors"]
+    )
+    st.markdown("---")
+
+    if "fi_df" not in st.session_state:
+        st.session_state.fi_df = load_fi_contacts()
+
+    df_view = st.session_state.fi_df.copy()
+
+    if contact_tier == "CEO":
+        df_view = df_view[df_view["Category"].str.contains("CEO", case=False, na=False)]
+    elif contact_tier == "CIO":
+        df_view = df_view[df_view["Category"].str.contains("CIO", case=False, na=False)]
+    elif contact_tier == "Directors":
+        df_view = df_view[df_view["Category"].str.contains("Director", case=False, na=False)]
+
+    search_fi = st.text_input("🔍 Search Bank / Executive Name:")
+    if search_fi:
+        df_view = df_view[df_view.apply(lambda r: r.astype(str).str.contains(search_fi, case=False).any(), axis=1)]
+
+    st.dataframe(df_view[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]], use_container_width=True, hide_index=True)
+
+# ====================================================
+# 3. ACCOUNT_MANAGERS
+# ====================================================
+elif cat_selection == "Account_Managers":
+    st.subheader("📋 Account Managers List")
+    if "am_df" not in st.session_state:
+        st.session_state.am_df = pd.DataFrame([
+            {"Bank / FI Name": "Abyssinia Bank", "Account Manager": "Abebe Kebede", "Phone": "0911000001", "Email": "abebe@ethswitch.com", "Tier": "Tier 1"},
+            {"Bank / FI Name": "Awash Bank", "Account Manager": "Tigist Mamo", "Phone": "0911000002", "Email": "tigist@ethswitch.com", "Tier": "Tier 1"},
+        ])
+    st.dataframe(st.session_state.am_df, use_container_width=True, hide_index=True)
+
+# ====================================================
+# 4. ISSUE_TRACKING (Bank issue & Internal issue)
+# ====================================================
+elif cat_selection == "Issue_Tracking":
+    st.subheader("🛠️ Issue Tracking List")
+    issue_sub = st.selectbox(
+        "Issue Sub-Category",
+        ["1. Bank issue", "2. Internal issue"]
+    )
+    st.markdown("---")
+
+    DEPARTMENTS = [
+        "Application", "Digital", "Network", "System", "Shared Service",
+        "Settlement and Reconciliation", "PIN and Card Department",
