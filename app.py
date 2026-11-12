@@ -44,6 +44,17 @@ def load_fi_contacts():
         return pd.DataFrame(columns=["FI Name", "Category", "Name", "Position", "Phone/Office Number", "Email Address"])
 
 
+@st.cache_data
+def load_account_managers():
+    try:
+        df = pd.read_excel("Account Manager  with FI's.xlsx", sheet_name="Sheet1")
+        df.columns = [str(c).strip() for c in df.columns]
+        df["Account Manager"] = df["Account Manager"].ffill()
+        return df.dropna(subset=["Bank/MFI Name"]).reset_index(drop=True)
+    except Exception:
+        return pd.DataFrame(columns=["Account Manager", "Bank/MFI Name"])
+
+
 def process_all_decline_files(files):
     all_frames = []
     for file in files:
@@ -119,7 +130,6 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
     )
     st.markdown("---")
 
-    # Fully visible radio selector listing all 5 report types explicitly
     st.markdown("**SELECT REPORT TYPE**")
     report_type = st.radio(
         "Select Report Type",
@@ -279,7 +289,6 @@ elif cat_selection == "FI's Contacts":
     if "fi_df" not in st.session_state:
         st.session_state.fi_df = load_fi_contacts()
 
-    # Expander to add a new contact
     with st.expander("➕ Add New FI Contact", expanded=False):
         with st.form("add_contact_form", clear_on_submit=True):
             col_a, col_b, col_c = st.columns(3)
@@ -324,7 +333,6 @@ elif cat_selection == "FI's Contacts":
         search_mask = df_tier.apply(lambda r: r.astype(str).str.contains(search_fi, case=False).any(), axis=1)
         df_tier = df_tier[search_mask]
 
-    # Render editable table and sync changes back to session state instantly
     edited_tier_df = st.data_editor(
         df_tier[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]],
         use_container_width=True,
@@ -338,86 +346,7 @@ elif cat_selection == "FI's Contacts":
         st.session_state.fi_df = df_full
 
     st.markdown("---")
-    # Save/Download button to update the master Excel file
     output_excel = io.BytesIO()
     with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
         for cat in ["CEO", "CIO", "Directors"]:
-            sub_save_df = st.session_state.fi_df[st.session_state.fi_df["Category"].str.contains(cat, case=False, na=False)]
-            sub_save_df[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]].to_excel(writer, sheet_name=cat, index=False)
-    
-    st.download_button(
-        label="💾 Download Updated Contacts File (.xlsx)",
-        data=output_excel.getvalue(),
-        file_name="FI's contacts.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        help="Download this updated file and replace your root folder's 'FI's contacts.xlsx' to permanently save all edits and additions!"
-    )
-
-# ====================================================
-# 3. ACCOUNT_MANAGERS
-# ====================================================
-elif cat_selection == "Account_Managers":
-    st.subheader("📋 Account Managers List")
-    if "am_df" not in st.session_state:
-        st.session_state.am_df = pd.DataFrame([
-            {"Bank / FI Name": "Abyssinia Bank", "Account Manager": "Abebe Kebede", "Phone": "0911000001", "Email": "abebe@ethswitch.com", "Tier": "Tier 1"},
-            {"Bank / FI Name": "Awash Bank", "Account Manager": "Tigist Mamo", "Phone": "0911000002", "Email": "tigist@ethswitch.com", "Tier": "Tier 1"},
-        ])
-    st.dataframe(st.session_state.am_df, use_container_width=True, hide_index=True)
-
-# ====================================================
-# 4. ISSUE_TRACKING (Bank issue & Internal issue)
-# ====================================================
-elif cat_selection == "Issue_Tracking":
-    st.subheader("🛠️ Issue Tracking List")
-    issue_sub = st.selectbox(
-        "Issue Sub-Category",
-        ["1. Bank issue", "2. Internal issue"]
-    )
-    st.markdown("---")
-
-    DEPARTMENTS = [
-        "Application", "Digital", "Network", "System", "Shared Service",
-        "Settlement and Reconciliation", "PIN and Card Department",
-        "Security", "Dispute and Fraud", "Database"
-    ]
-
-    if "issues_df" not in st.session_state:
-        st.session_state.issues_df = pd.DataFrame(columns=[
-            "Issue ID", "Type", "Date Logged", "Entity / Department", "Severity", "Description", "Status"
-        ])
-
-    with st.expander(f"➕ Log New {issue_sub}", expanded=True):
-        with st.form(f"form_{issue_sub}", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                entity_name = st.text_input("Bank / FI Name" if "Bank" in issue_sub else "Internal Department", placeholder="e.g., Dashen Bank or Network Team")
-                dept = st.selectbox("Assigned Department", DEPARTMENTS)
-            with c2:
-                severity = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
-                status = st.selectbox("Status", ["Open", "In Progress", "Resolved", "Closed"])
-            with c3:
-                log_date = st.date_input("Date Logged", value=date.today())
-            
-            description = st.text_area("Issue Description", placeholder="Describe the problem...")
-            submitted = st.form_submit_button("Submit Issue")
-            
-            if submitted and entity_name and description:
-                issue_id = f"ISS-{len(st.session_state.issues_df) + 1:03d}"
-                new_row = pd.DataFrame([{
-                    "Issue ID": issue_id,
-                    "Type": issue_sub,
-                    "Date Logged": str(log_date),
-                    "Entity / Department": entity_name.strip(),
-                    "Severity": severity,
-                    "Description": description.strip(),
-                    "Status": status
-                }])
-                st.session_state.issues_df = pd.concat([st.session_state.issues_df, new_row], ignore_index=True)
-                st.success(f"Logged {issue_sub} **{issue_id}** successfully!")
-
-    st.divider()
-    st.subheader(f"📋 {issue_sub} List")
-    
-    filtered_issues = st.session_state.issues_df[st.session_state.issues_df["Type"] == issue_sub]
-    st.dataframe(filtered_issues, use_container_width=True, hide_index=True)
+            sub_save_df =
