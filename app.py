@@ -119,6 +119,7 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
     )
     st.markdown("---")
 
+    # Fully visible radio selector listing all 5 report types explicitly
     st.markdown("**SELECT REPORT TYPE**")
     report_type = st.radio(
         "Select Report Type",
@@ -153,4 +154,61 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
                 combined_decline[col] = pd.to_numeric(combined_decline[col], errors="coerce").fillna(0)
 
             summary_pivot = combined_decline.groupby(rc_col)[valid_cols].sum().reset_index()
-            summary_pivot.rename(columns={rc_col: "RC"},
+            summary_pivot.rename(columns={rc_col: "RC"}, inplace=True)
+            summary_pivot["Total"] = summary_pivot[valid_cols].sum(axis=1)
+
+            total_row = {"RC": "TOTAL"}
+            for col in valid_cols + ["Total"]:
+                total_row[col] = summary_pivot[col].sum()
+            summary_pivot = pd.concat([summary_pivot, pd.DataFrame([total_row])], ignore_index=True)
+
+            display_df = summary_pivot.copy()
+            for col in valid_cols + ["Total"]:
+                display_df[col] = display_df[col].apply(lambda x: f"<span style='color: red; font-weight: bold;'>{int(float(x)):,}</span>" if float(x) > 100 else f"{int(float(x)):,}")
+
+            st.markdown(display_df.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+            out_sum = io.BytesIO()
+            with pd.ExcelWriter(out_sum, engine="openpyxl") as writer:
+                summary_pivot.to_excel(writer, sheet_name="ATM Decline Summary", index=False)
+            st.download_button("📥 Download ATM Decline Summary (.xlsx)", out_sum.getvalue(), "ATM_Decline_Summary.xlsx")
+        else:
+            st.info("👆 Please upload your daily ATM decline files at the top.")
+
+    # Report 2
+    elif report_type == "2. ATM Transaction Success Rate Summary":
+        st.subheader("📈 ATM Transaction Success Rate Summary")
+        if uploaded_files:
+            success_rows = []
+            for file in uploaded_files:
+                try:
+                    xls = pd.ExcelFile(file)
+                    cleaned_name = file.name.split(".")[0].replace("ATM Declined Transaction Report for", "").replace("ATM Success Rate", "").strip()
+                    file_date = re.sub(r",\s*", ", ", cleaned_name)
+
+                    for sheet_name in xls.sheet_names:
+                        df_sheet = pd.read_excel(file, sheet_name=sheet_name)
+                        target_row_series = None
+                        for idx, row in df_sheet.iterrows():
+                            row_vals_str = " ".join([str(v) for v in row.values if pd.notna(v)]).upper()
+                            if "SUCC" in row_vals_str and "RATE" in row_vals_str:
+                                target_row_series = row
+                                break
+                        if target_row_series is not None:
+                            header_idx = None
+                            for h in range(len(df_sheet)):
+                                h_str = " ".join([str(v) for v in df_sheet.iloc[h].values if pd.notna(v)]).upper()
+                                if "CBE" in h_str:
+                                    header_idx = h
+                                    break
+                            cols = df_sheet.iloc[header_idx].tolist() if header_idx is not None else df_sheet.columns.tolist()
+                            vals = target_row_series.values.tolist()
+
+                            record = {"Bank/Date": file_date}
+                            for c, val in zip(cols, vals):
+                                c_str = re.sub(r'\s+', ' ', str(c).strip().upper())
+                                if c_str in HEADER_MAPPING:
+                                    try: record[HEADER_MAPPING[c_str]] = float(str(val).replace("%", "").strip())
+                                    except: record[HEADER_MAPPING[c_str]] = None
+                            if len(vals) > 25:
+                                try: record["Weighted Average"] = float(str(
