@@ -6,48 +6,75 @@ from datetime import date
 
 # Page Configuration
 st.set_page_config(
-    page_title="EthSwitch Performance Reporting Dashboard",
+    page_title="EthSwitch CRM Dashboard",
     page_icon="💳",
     layout="wide",
 )
 
-# Custom CSS for UI styling
+# Custom CSS matching your exact design preference
 st.markdown("""
     <style>
-        .banner {
-            background-color: #d35400;
-            padding: 15px;
-            border-radius: 5px;
+        .main-title {
             text-align: center;
-            font-weight: bold;
-            color: white;
-            font-size: 22px;
+            font-size: 28px;
+            font-weight: 800;
+            color: #d35400;
+            letter-spacing: 1px;
+        }
+        .hero-banner {
+            background: linear-gradient(0deg, rgba(249,235,221,0.5) 0%, rgba(255,255,255,1) 100%);
+            border: 1px solid #f9ebdd;
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
             margin-bottom: 25px;
         }
-        .section-header {
-            font-size: 18px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin-top: 15px;
-            margin-bottom: 10px;
+        .hero-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #d35400;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+        .hero-subtitle {
+            font-size: 14px;
+            color: #666;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# Top Banner
-st.markdown('<div class="banner">EthSwitch Performance Reporting & CRM Dashboard</div>', unsafe_allow_html=True)
+# ----------------------------------------------------
+# HEADER WITH LOGOS / TITLES
+# ----------------------------------------------------
+col1, col2, col3 = st.columns([1.5, 3, 1.5])
+with col1:
+    st.markdown("### **ETHSWITCH**")
+with col2:
+    st.markdown('<div class="main-title">EthSwitch CRM Dashboard</div>', unsafe_allow_html=True)
+with col3:
+    st.markdown("<h3 style='text-align: right;'>EthioPay</h3>", unsafe_allow_html=True)
+
+st.markdown("""
+    <div class="hero-banner">
+        <div class="hero-title">Performance Reporting & CRM Hub</div>
+        <div class="hero-subtitle">Upload your daily SmartVista source reports and manage FI Contacts, Account Managers, and Issues</div>
+    </div>
+""", unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# MAIN TOP-LEVEL NAVIGATION SELECTOR
+# TIER 1: MAIN NAVIGATION CATEGORY
 # ----------------------------------------------------
-main_nav = st.selectbox(
-    "Select Module",
+st.markdown("**REPORT CATEGORY**")
+cat_selection = st.radio(
+    "Report Category",
     [
-        "1. Bi-weekly and monthly reports",
-        "2. FI Contacts",
-        "3. Account Managers",
-        "4. Issue Tracking",
-    ]
+        "Bi-weekly and monthly reports",
+        "FI_Contacts",
+        "Account_Managers",
+        "Issue_Tracking"
+    ],
+    horizontal=True,
+    label_visibility="collapsed"
 )
 
 st.markdown("---")
@@ -61,17 +88,14 @@ HEADER_MAPPING = {
 }
 
 # ====================================================
-# MODULE 1: BI-WEEKLY AND MONTHLY REPORTS
+# 1. BI-WEEKLY AND MONTHLY REPORTS
 # ====================================================
-if main_nav == "1. Bi-weekly and monthly reports":
-    st.markdown('<div class="section-header">📁 Upload Daily Source Reports</div>', unsafe_allow_html=True)
-    st.markdown("Upload all daily ATM report files for the month below:")
-
+if cat_selection == "Bi-weekly and monthly reports":
+    st.markdown("**UPLOAD DAILY SOURCE REPORTS**")
     uploaded_files = st.file_uploader(
-        "Upload daily files",
+        "Upload all daily ATM report files for the month below:",
         type=["xlsx", "xls"],
         accept_multiple_files=True,
-        label_visibility="collapsed",
     )
     st.markdown("---")
 
@@ -84,7 +108,8 @@ if main_nav == "1. Bi-weekly and monthly reports":
             "4. ATM decline contribution by participant",
             "5. Major ATM declined transactions",
         ],
-        horizontal=True
+        horizontal=True,
+        label_visibility="collapsed"
     )
     st.markdown("---")
 
@@ -151,9 +176,9 @@ if main_nav == "1. Bi-weekly and monthly reports":
             out_sum = io.BytesIO()
             with pd.ExcelWriter(out_sum, engine="openpyxl") as writer:
                 summary_pivot.to_excel(writer, sheet_name="ATM Decline Summary", index=False)
-            st.download_button("📥 Download Summary (.xlsx)", out_sum.getvalue(), "ATM_Decline_Summary.xlsx")
+            st.download_button("📥 Download ATM Decline Summary (.xlsx)", out_sum.getvalue(), "ATM_Decline_Summary.xlsx")
         else:
-            st.info("👆 Please upload your daily ATM decline files above.")
+            st.info("👆 Please upload your daily ATM decline files at the top.")
 
     # Report 2
     elif report_type == "2. ATM Transaction Success Rate Summary":
@@ -206,14 +231,16 @@ if main_nav == "1. Bi-weekly and monthly reports":
 
                 st.dataframe(df_success, use_container_width=True)
             else:
-                st.warning("Could not locate success rate rows in files.")
+                st.warning("Could not locate 'SUCC. RATE' rows in the uploaded files.")
         else:
-            st.info("👆 Please upload files above.")
+            st.info("👆 Please upload your daily source report files at the top.")
 
+    # Report 3
     elif report_type == "3. ATM Success Rate Ranking":
         st.subheader("🏆 ATM Success Rate Ranking")
-        st.info("Ranking module active.")
+        st.info("Report 3 is ready for review once Report 2 is locked down.")
 
+    # Report 4
     elif report_type == "4. ATM decline contribution by participant":
         st.subheader("👤 ATM Decline Contribution by Participant")
         if combined_decline is not None:
@@ -225,18 +252,18 @@ if main_nav == "1. Bi-weekly and monthly reports":
             part_df = pd.DataFrame(list(bank_totals.items()), columns=["Participant", "Declined transactions"]).sort_values(by="Declined transactions", ascending=False).reset_index(drop=True)
             st.dataframe(part_df, use_container_width=True)
         else:
-            st.info("👆 Please upload daily decline files.")
+            st.info("👆 Please upload your daily decline Excel files at the top.")
 
+    # Report 5
     elif report_type == "5. Major ATM declined transactions":
         st.subheader("🔍 Major ATM Declined Transactions")
-        st.info("Major declined transactions module active.")
+        st.info("Major ATM declined transactions module active.")
 
 # ====================================================
-# MODULE 2: FI CONTACTS
+# 2. FI_CONTACTS
 # ====================================================
-elif main_nav == "2. FI Contacts":
-    st.subheader("📇 Financial Institution Contacts")
-    
+elif cat_selection == "FI_Contacts":
+    st.subheader("📇 FI's Contacts Directory")
     @st.cache_data
     def load_fi_contacts():
         try:
@@ -262,10 +289,10 @@ elif main_nav == "2. FI Contacts":
     st.dataframe(df_view, use_container_width=True, hide_index=True)
 
 # ====================================================
-# MODULE 3: ACCOUNT MANAGERS
+# 3. ACCOUNT_MANAGERS
 # ====================================================
-elif main_nav == "3. Account Managers":
-    st.subheader("📋 EthSwitch Account Managers List")
+elif cat_selection == "Account_Managers":
+    st.subheader("📋 Account Managers List")
     if "am_df" not in st.session_state:
         st.session_state.am_df = pd.DataFrame([
             {"Bank / FI Name": "Abyssinia Bank", "Account Manager": "Abebe Kebede", "Phone": "0911000001", "Email": "abebe@ethswitch.com", "Tier": "Tier 1"},
@@ -274,12 +301,16 @@ elif main_nav == "3. Account Managers":
     st.dataframe(st.session_state.am_df, use_container_width=True, hide_index=True)
 
 # ====================================================
-# MODULE 4: ISSUE TRACKING (Bank issue & Internal issue)
+# 4. ISSUE_TRACKING (Bank issue & Internal issue)
 # ====================================================
-elif main_nav == "4. Issue Tracking":
-    st.subheader("🛠️ Issue Tracking Management")
-    
-    issue_sub = st.radio("Issue Category", ["1. Bank issue", "2. Internal issue"], horizontal=True)
+elif cat_selection == "Issue_Tracking":
+    st.subheader("🛠️ Issue Tracking List")
+    issue_sub = st.radio(
+        "Issue Sub-Category",
+        ["1. Bank issue", "2. Internal issue"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
     st.markdown("---")
 
     DEPARTMENTS = [
