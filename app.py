@@ -26,6 +26,52 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
+# HELPER FUNCTIONS (Top-level scope)
+# ----------------------------------------------------
+@st.cache_data
+def load_fi_contacts():
+    try:
+        xls = pd.ExcelFile("FI's contacts.xlsx")
+        all_records = []
+        for sheet in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name=sheet, skiprows=1).iloc[:, 1:6].copy()
+            df.columns = ["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]
+            df["FI Name"] = df["FI Name"].ffill()
+            df["Category"] = sheet.strip()
+            all_records.append(df)
+        return pd.concat(all_records, ignore_index=True)
+    except Exception:
+        return pd.DataFrame(columns=["FI Name", "Category", "Name", "Position", "Phone/Office Number", "Email Address"])
+
+
+def process_all_decline_files(files):
+    all_frames = []
+    for file in files:
+        try:
+            xls = pd.ExcelFile(file)
+            for sheet_name in xls.sheet_names:
+                if "sheet16" in sheet_name.lower() or "summary" in sheet_name.lower():
+                    continue
+                df_sheet = pd.read_excel(file, sheet_name=sheet_name)
+                header_idx = None
+                for idx, row in df_sheet.iterrows():
+                    row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
+                    if "RC/BANK NAME" in row_str or "RC" in row_str:
+                        header_idx = idx
+                        break
+                if header_idx is not None:
+                    df_sheet.columns = [str(c).strip() for c in df_sheet.iloc[header_idx].values]
+                    sub_df = df_sheet.iloc[header_idx + 1:].copy()
+                    rc_col = sub_df.columns[0]
+                    sub_df = sub_df.dropna(subset=[rc_col])
+                    sub_df = sub_df[~sub_df[rc_col].astype(str).str.contains("Total|RC|Response Code|Issu", case=False, na=False)]
+                    all_frames.append(sub_df)
+        except Exception as e:
+            st.error(f"Error processing {file.name}: {e}")
+    return pd.concat(all_frames, ignore_index=True) if all_frames else None
+
+
+# ----------------------------------------------------
 # HEADER WITH LOGOS / TITLES
 # ----------------------------------------------------
 col1, col2, col3 = st.columns([1.5, 3, 1.5])
@@ -84,32 +130,6 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
         ]
     )
     st.markdown("---")
-
-    def process_all_decline_files(files):
-        all_frames = []
-        for file in files:
-            try:
-                xls = pd.ExcelFile(file)
-                for sheet_name in xls.sheet_names:
-                    if "sheet16" in sheet_name.lower() or "summary" in sheet_name.lower():
-                        continue
-                    df_sheet = pd.read_excel(file, sheet_name=sheet_name)
-                    header_idx = None
-                    for idx, row in df_sheet.iterrows():
-                        row_str = " ".join([str(v) for v in row.values if pd.notna(v)])
-                        if "RC/BANK NAME" in row_str or "RC" in row_str:
-                            header_idx = idx
-                            break
-                    if header_idx is not None:
-                        df_sheet.columns = [str(c).strip() for c in df_sheet.iloc[header_idx].values]
-                        sub_df = df_sheet.iloc[header_idx + 1:].copy()
-                        rc_col = sub_df.columns[0]
-                        sub_df = sub_df.dropna(subset=[rc_col])
-                        sub_df = sub_df[~sub_df[rc_col].astype(str).str.contains("Total|RC|Response Code|Issu", case=False, na=False)]
-                        all_frames.append(sub_df)
-            except Exception as e:
-                st.error(f"Error processing {file.name}: {e}")
-        return pd.concat(all_frames, ignore_index=True) if all_frames else None
 
     combined_decline = process_all_decline_files(uploaded_files) if uploaded_files else None
 
@@ -199,55 +219,4 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
             if success_rows:
                 df_success = pd.DataFrame(success_rows)
                 bank_cols = [c for c in df_success.columns if c not in ["Bank/Date", "Weighted Average"]]
-                ordered_cols = ["Bank/Date"] + bank_cols + (["Weighted Average"] if "Weighted Average" in df_success.columns else [])
-                df_success = df_success[[c for c in ordered_cols if c in df_success.columns]]
-
-                avg_dict = {"Bank/Date": "Average"}
-                for col in [c for c in df_success.columns if c != "Bank/Date"]:
-                    avg_dict[col] = pd.to_numeric(df_success[col], errors="coerce").mean()
-                df_success = pd.concat([df_success, pd.DataFrame([avg_dict])], ignore_index=True)
-
-                st.dataframe(df_success, use_container_width=True)
-            else:
-                st.warning("Could not locate 'SUCC. RATE' rows in the uploaded files.")
-        else:
-            st.info("👆 Please upload your daily source report files at the top.")
-
-    # Report 3
-    elif report_type == "3. ATM Success Rate Ranking":
-        st.subheader("🏆 ATM Success Rate Ranking")
-        st.info("Report 3 is ready for review once Report 2 is locked down.")
-
-    # Report 4
-    elif report_type == "4. ATM decline contribution by participant":
-        st.subheader("👤 ATM Decline Contribution by Participant")
-        if combined_decline is not None:
-            bank_totals = {}
-            for col in combined_decline.columns:
-                col_clean = str(col).strip().upper()
-                if "GEDAA" not in col_clean and "GADAA" not in col_clean and col_clean in HEADER_MAPPING:
-                    bank_totals[HEADER_MAPPING[col_clean]] = bank_totals.get(HEADER_MAPPING[col_clean], 0) + pd.to_numeric(combined_decline[col], errors="coerce").fillna(0).sum()
-            part_df = pd.DataFrame(list(bank_totals.items()), columns=["Participant", "Declined transactions"]).sort_values(by="Declined transactions", ascending=False).reset_index(drop=True)
-            st.dataframe(part_df, use_container_width=True)
-        else:
-            st.info("👆 Please upload your daily decline Excel files at the top.")
-
-    # Report 5
-    elif report_type == "5. Major ATM declined transactions":
-        st.subheader("🔍 Major ATM Declined Transactions")
-        st.info("Major ATM declined transactions module active.")
-
-# ====================================================
-# 2. FI's CONTACTS (CEO, CIO, Directors)
-# ====================================================
-elif cat_selection == "FI's Contacts":
-    st.subheader("📇 FI's Contacts")
-    
-    contact_tier = st.selectbox(
-        "Select Management Tier",
-        ["CEO", "CIO", "Directors"]
-    )
-    st.markdown("---")
-
-    @st.cache_data
-    def load_fi_contacts():
+                ordered_cols = ["Bank/Date"]
