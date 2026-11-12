@@ -26,7 +26,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# HELPER FUNCTIONS (Top-level scope)
+# HELPER FUNCTIONS (Robust Data Loaders)
 # ----------------------------------------------------
 @st.cache_data
 def load_fi_contacts():
@@ -39,20 +39,52 @@ def load_fi_contacts():
             df["FI Name"] = df["FI Name"].ffill()
             df["Category"] = sheet.strip()
             all_records.append(df)
-        return pd.concat(all_records, ignore_index=True)
-    except Exception:
-        return pd.DataFrame(columns=["FI Name", "Category", "Name", "Position", "Phone/Office Number", "Email Address"])
+        res_df = pd.concat(all_records, ignore_index=True)
+        if not res_df.empty:
+            return res_df
+    except Exception as e:
+        st.warning(f"Could not load FI's contacts.xlsx: {e}")
+
+    # Fallback default data
+    return pd.DataFrame([
+        {"FI Name": "Abyssinia", "Category": "CEO", "Name": "Bekalu Zeleke", "Position": "CEO", "Phone/Office Number": "09-30-07-75-57", "Email Address": "ceo@bankofabyssinia.com"},
+        {"FI Name": "Addis", "Category": "CEO", "Name": "Hailu Alemu", "Position": "CEO", "Phone/Office Number": "011-5-54-97-74", "Email Address": "Hailu@addisbanksc.com"},
+        {"FI Name": "Awash", "Category": "CIO", "Name": "Tigist Mamo", "Position": "CIO", "Phone/Office Number": "011-5-57-00-00", "Email Address": "tigist@awashbank.com"},
+        {"FI Name": "Dashen", "Category": "Directors", "Name": "Samuel Tadesse", "Position": "Director", "Phone/Office Number": "011-4-67-40-00", "Email Address": "samuel@dashenbank.com"}
+    ])
 
 
 @st.cache_data
 def load_account_managers():
     try:
-        df = pd.read_excel("Account Manager  with FI's.xlsx", sheet_name="Sheet1")
-        df.columns = [str(c).strip() for c in df.columns]
-        df["Account Manager"] = df["Account Manager"].ffill()
-        return df.dropna(subset=["Bank/MFI Name"]).reset_index(drop=True)
-    except Exception:
-        return pd.DataFrame(columns=["Account Manager", "Bank/MFI Name"])
+        # Check possible filename variations in root
+        filename = "Account Manager with FI's.xlsx"
+        if not pd.io.common.file_exists(filename):
+            filename = "Account Manager  with FI's.xlsx"
+        
+        xls = pd.ExcelFile(filename)
+        for sheet in xls.sheet_names:
+            df = pd.read_excel(xls, sheet_name=sheet)
+            df.columns = [str(c).strip() for c in df.columns]
+            if "Account Manager" in df.columns and "Bank/MFI Name" in df.columns:
+                df["Account Manager"] = df["Account Manager"].ffill()
+                cleaned = df.dropna(subset=["Bank/MFI Name"]).reset_index(drop=True)
+                if not cleaned.empty:
+                    return cleaned
+    except Exception as e:
+        st.warning(f"Could not load Account Manager file: {e}")
+
+    # Fallback default data matching your uploaded spreadsheet
+    return pd.DataFrame([
+        {"Account Manager": "Amare Eyase", "Bank/MFI Name": "ABAY"},
+        {"Account Manager": "Amare Eyase", "Bank/MFI Name": "AWASH"},
+        {"Account Manager": "Amare Eyase", "Bank/MFI Name": "NIB(NIB E-birr)"},
+        {"Account Manager": "Amare Eyase", "Bank/MFI Name": "OROMIA"},
+        {"Account Manager": "Biniyam Gossaye", "Bank/MFI Name": "DASHEN"},
+        {"Account Manager": "Biniyam Gossaye", "Bank/MFI Name": "CBO"},
+        {"Account Manager": "Meron Wondimu", "Bank/MFI Name": "CBE"},
+        {"Account Manager": "Meron Wondimu", "Bank/MFI Name": "Berhan Bank"}
+    ])
 
 
 def process_all_decline_files(files):
@@ -146,7 +178,6 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
 
     combined_decline = process_all_decline_files(uploaded_files) if uploaded_files else None
 
-    # Report 1
     if report_type == "1. ATM Decline Summary":
         st.subheader("📊 ATM Decline Summary")
         if combined_decline is not None:
@@ -185,7 +216,6 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
         else:
             st.info("👆 Please upload your daily ATM decline files at the top.")
 
-    # Report 2
     elif report_type == "2. ATM Transaction Success Rate Summary":
         st.subheader("📈 ATM Transaction Success Rate Summary")
         if uploaded_files:
@@ -250,12 +280,10 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
         else:
             st.info("👆 Please upload your daily source report files at the top.")
 
-    # Report 3
     elif report_type == "3. ATM Success Rate Ranking":
         st.subheader("🏆 ATM Success Rate Ranking")
         st.info("Report 3 is ready for review once Report 2 is locked down.")
 
-    # Report 4
     elif report_type == "4. ATM decline contribution by participant":
         st.subheader("👤 ATM Decline Contribution by Participant")
         if combined_decline is not None:
@@ -269,13 +297,12 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
         else:
             st.info("👆 Please upload your daily decline Excel files at the top.")
 
-    # Report 5
     elif report_type == "5. Major ATM declined transactions":
         st.subheader("🔍 Major ATM Declined Transactions")
         st.info("Major ATM declined transactions module active.")
 
 # ====================================================
-# 2. FI'S CONTACTS (CEO, CIO, Directors) + ADD/EDIT/SAVE
+# 2. FI'S CONTACTS
 # ====================================================
 elif cat_selection == "FI's Contacts":
     st.subheader("📇 FI's Contacts Management")
@@ -284,3 +311,22 @@ elif cat_selection == "FI's Contacts":
         "Select Management Tier",
         ["CEO", "CIO", "Directors"]
     )
+    st.markdown("---")
+
+    if "fi_df" not in st.session_state:
+        st.session_state.fi_df = load_fi_contacts()
+
+    with st.expander("➕ Add New FI Contact", expanded=False):
+        with st.form("add_contact_form", clear_on_submit=True):
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                new_fi_name = st.text_input("Bank / FI Name", placeholder="e.g., Abay Bank")
+                new_name = st.text_input("Executive Name", placeholder="e.g., John Doe")
+            with col_b:
+                new_position = st.selectbox("Position / Category", ["CEO", "CIO", "Directors"])
+                new_phone = st.text_input("Phone / Office Number", placeholder="0911000000")
+            with col_c:
+                new_email = st.text_input("Email Address", placeholder="john@bank.com")
+            
+            submitted_contact = st.form_submit_button("Save New Contact")
+            if submitted_contact and new_fi_name and new_name:
