@@ -35,7 +35,7 @@ st.markdown("""
 
 # Orange Top Banner
 st.markdown(
-    '<div class="banner">BI-WEEKLY & MONTHLY REPORT GENERATOR</div>',
+    '<div class="banner">CRM Projects</div>',
     unsafe_allow_html=True,
 )
 
