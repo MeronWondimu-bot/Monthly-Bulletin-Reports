@@ -119,6 +119,7 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
     )
     st.markdown("---")
 
+    # Fully visible radio selector listing all 5 report types explicitly
     st.markdown("**SELECT REPORT TYPE**")
     report_type = st.radio(
         "Select Report Type",
@@ -264,7 +265,7 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
         st.info("Major ATM declined transactions module active.")
 
 # ====================================================
-# 2. FI'S CONTACTS (CEO, CIO, Directors) + ADD/EDIT
+# 2. FI'S CONTACTS (CEO, CIO, Directors) + ADD/EDIT/SAVE
 # ====================================================
 elif cat_selection == "FI's Contacts":
     st.subheader("📇 FI's Contacts Management")
@@ -305,27 +306,51 @@ elif cat_selection == "FI's Contacts":
                 st.success(f"Successfully added contact for **{new_fi_name}**!")
 
     st.markdown("### ✏️ Edit Contacts Below (Double-click any cell to edit)")
-    
-    df_view = st.session_state.fi_df.copy()
 
+    df_full = st.session_state.fi_df.copy()
     if contact_tier == "CEO":
-        df_view = df_view[df_view["Category"].str.contains("CEO", case=False, na=False)]
+        mask = df_full["Category"].str.contains("CEO", case=False, na=False)
     elif contact_tier == "CIO":
-        df_view = df_view[df_view["Category"].str.contains("CIO", case=False, na=False)]
+        mask = df_full["Category"].str.contains("CIO", case=False, na=False)
     elif contact_tier == "Directors":
-        df_view = df_view[df_view["Category"].str.contains("Director", case=False, na=False)]
+        mask = df_full["Category"].str.contains("Director", case=False, na=False)
+    else:
+        mask = pd.Series([True] * len(df_full))
+
+    df_tier = df_full[mask].copy()
 
     search_fi = st.text_input("🔍 Search Bank / Executive Name:")
     if search_fi:
-        df_view = df_view[df_view.apply(lambda r: r.astype(str).str.contains(search_fi, case=False).any(), axis=1)]
+        search_mask = df_tier.apply(lambda r: r.astype(str).str.contains(search_fi, case=False).any(), axis=1)
+        df_tier = df_tier[search_mask]
 
-    # Make table editable directly in the UI
-    edited_df = st.data_editor(
-        df_view[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]],
+    # Render editable table and sync changes back to session state instantly
+    edited_tier_df = st.data_editor(
+        df_tier[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]],
         use_container_width=True,
         hide_index=True,
         num_rows="dynamic",
-        key="fi_contacts_editor"
+        key=f"fi_editor_{contact_tier}"
+    )
+
+    if not edited_tier_df.equals(df_tier[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]]):
+        df_full.loc[df_tier.index, ["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]] = edited_tier_df.values
+        st.session_state.fi_df = df_full
+
+    st.markdown("---")
+    # Save/Download button to update the master Excel file
+    output_excel = io.BytesIO()
+    with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
+        for cat in ["CEO", "CIO", "Directors"]:
+            sub_save_df = st.session_state.fi_df[st.session_state.fi_df["Category"].str.contains(cat, case=False, na=False)]
+            sub_save_df[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]].to_excel(writer, sheet_name=cat, index=False)
+    
+    st.download_button(
+        label="💾 Download Updated Contacts File (.xlsx)",
+        data=output_excel.getvalue(),
+        file_name="FI's contacts.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        help="Download this updated file and replace your root folder's 'FI's contacts.xlsx' to permanently save all edits and additions!"
     )
 
 # ====================================================
