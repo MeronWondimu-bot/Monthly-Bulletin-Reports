@@ -349,4 +349,115 @@ elif cat_selection == "FI's Contacts":
     output_excel = io.BytesIO()
     with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
         for cat in ["CEO", "CIO", "Directors"]:
-            sub_save_df =
+            sub_save_df = st.session_state.fi_df[st.session_state.fi_df["Category"].str.contains(cat, case=False, na=False)]
+            sub_save_df[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]].to_excel(writer, sheet_name=cat, index=False)
+    
+    st.download_button(
+        label="💾 Download Updated Contacts File (.xlsx)",
+        data=output_excel.getvalue(),
+        file_name="FI's contacts.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        help="Download this updated file and replace your root folder's 'FI's contacts.xlsx' to permanently save all edits and additions!"
+    )
+
+# ====================================================
+# 3. ACCOUNT_MANAGERS (READ FROM Account Manager  with FI's.xlsx)
+# ====================================================
+elif cat_selection == "Account_Managers":
+    st.subheader("📋 Account Managers & FI Portfolio Management")
+    
+    if "am_df" not in st.session_state:
+        st.session_state.am_df = load_account_managers()
+
+    with st.expander("➕ Add New Account Manager Portfolio Assignment", expanded=False):
+        with st.form("add_am_form", clear_on_submit=True):
+            col_1, col_2 = st.columns(2)
+            with col_1:
+                am_name = st.text_input("Account Manager Name", placeholder="e.g., Meron Wondimu")
+            with col_2:
+                am_bank = st.text_input("Bank / MFI Name", placeholder="e.g., Dashen Bank")
+            
+            submitted_am = st.form_submit_button("Save Assignment")
+            if submitted_am and am_name and am_bank:
+                new_am_row = pd.DataFrame([{
+                    "Account Manager": am_name.strip(),
+                    "Bank/MFI Name": am_bank.strip()
+                }])
+                st.session_state.am_df = pd.concat([st.session_state.am_df, new_am_row], ignore_index=True)
+                st.success(f"Successfully assigned **{am_bank}** to **{am_name}**!")
+
+    st.markdown("### ✏️ Edit Account Managers Below (Double-click any cell to edit)")
+
+    search_am = st.text_input("🔍 Search Account Manager / Bank Name:")
+    am_view = st.session_state.am_df.copy()
+    if search_am:
+        am_mask = am_view.apply(lambda r: r.astype(str).str.contains(search_am, case=False).any(), axis=1)
+        am_view = am_view[am_mask]
+
+    edited_am_df = st.data_editor(
+        am_view,
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        key="am_editor"
+    )
+
+    if not edited_am_df.equals(am_view):
+        st.session_state.am_df = edited_am_df
+
+    st.markdown("---")
+    am_excel = io.BytesIO()
+    with pd.ExcelWriter(am_excel, engine="openpyxl") as writer:
+        st.session_state.am_df.to_excel(writer, sheet_name="Sheet1", index=False)
+    
+    st.download_button(
+        label="💾 Download Updated Account Managers File (.xlsx)",
+        data=am_excel.getvalue(),
+        file_name="Account Manager  with FI's.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        help="Download this updated file to replace your root folder's 'Account Manager  with FI's.xlsx'!"
+    )
+
+# ====================================================
+# 4. ISSUE_TRACKING (Bank issue & Internal issue)
+# ====================================================
+elif cat_selection == "Issue_Tracking":
+    st.subheader("🛠️ Issue Tracking List")
+    issue_sub = st.selectbox(
+        "Issue Sub-Category",
+        ["1. Bank issue", "2. Internal issue"]
+    )
+    st.markdown("---")
+
+    DEPARTMENTS = [
+        "Application", "Digital", "Network", "System", "Shared Service",
+        "Settlement and Reconciliation", "PIN and Card Department",
+        "Security", "Dispute and Fraud", "Database"
+    ]
+
+    if "issues_df" not in st.session_state:
+        st.session_state.issues_df = pd.DataFrame(columns=[
+            "Issue ID", "Type", "Date Logged", "Entity / Department", "Severity", "Description", "Status"
+        ])
+
+    with st.expander(f"➕ Log New {issue_sub}", expanded=True):
+        with st.form(f"form_{issue_sub}", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                entity_name = st.text_input("Bank / FI Name" if "Bank" in issue_sub else "Internal Department", placeholder="e.g., Dashen Bank or Network Team")
+                dept = st.selectbox("Assigned Department", DEPARTMENTS)
+            with c2:
+                severity = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
+                status = st.selectbox("Status", ["Open", "In Progress", "Resolved", "Closed"])
+            with c3:
+                log_date = st.date_input("Date Logged", value=date.today())
+            
+            description = st.text_area("Issue Description", placeholder="Describe the problem...")
+            submitted = st.form_submit_button("Submit Issue")
+            
+            if submitted and entity_name and description:
+                issue_id = f"ISS-{len(st.session_state.issues_df) + 1:03d}"
+                new_row = pd.DataFrame([{
+                    "Issue ID": issue_id,
+                    "Type": issue_sub,
+                    "Date Logged":
