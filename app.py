@@ -55,18 +55,21 @@ with col3:
     st.markdown("<h3 style='text-align: right;'>EthioPay</h3>", unsafe_allow_html=True)
 
 st.markdown("""
-  
+    <div class="hero-banner">
+        <div class="hero-title">Performance Reporting & CRM Hub</div>
+        <div class="hero-subtitle">Upload your daily SmartVista source reports and manage FI Contacts, Account Managers, and Issues</div>
+    </div>
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------
-# TIER 1: MAIN NAVIGATION CATEGORY
+# CRM OVERALL TASKS (MAIN NAVIGATION)
 # ----------------------------------------------------
-st.markdown("**REPORT CATEGORY**")
+st.markdown("**CRM OVERALL TASKS**")
 cat_selection = st.radio(
-    "Report Category",
+    "CRM Overall Tasks",
     [
-        "Bi-weekly and monthly reports",
-        "FI_Contacts",
+        "Bi- weekly and Monthly performance reports",
+        "FI's Contacts",
         "Account_Managers",
         "Issue_Tracking"
     ],
@@ -85,9 +88,9 @@ HEADER_MAPPING = {
 }
 
 # ====================================================
-# 1. BI-WEEKLY AND MONTHLY REPORTS
+# 1. BI-WEEKLY AND MONTHLY PERFORMANCE REPORTS
 # ====================================================
-if cat_selection == "Bi-weekly and monthly reports":
+if cat_selection == "Bi- weekly and Monthly performance reports":
     st.markdown("**UPLOAD DAILY SOURCE REPORTS**")
     uploaded_files = st.file_uploader(
         "Upload all daily ATM report files for the month below:",
@@ -96,17 +99,16 @@ if cat_selection == "Bi-weekly and monthly reports":
     )
     st.markdown("---")
 
-    report_type = st.radio(
-        "Report Selection",
+    # Dropdown / Selectbox selector for report types
+    report_type = st.selectbox(
+        "Select Report Type",
         [
             "1. ATM Decline Summary",
             "2. ATM Transaction Success Rate Summary",
             "3. ATM Success Rate Ranking",
             "4. ATM decline contribution by participant",
             "5. Major ATM declined transactions",
-        ],
-        horizontal=True,
-        label_visibility="collapsed"
+        ]
     )
     st.markdown("---")
 
@@ -257,10 +259,19 @@ if cat_selection == "Bi-weekly and monthly reports":
         st.info("Major ATM declined transactions module active.")
 
 # ====================================================
-# 2. FI_CONTACTS
+# 2. FI'S CONTACTS (CEO, CIO, Directors)
 # ====================================================
-elif cat_selection == "FI_Contacts":
-    st.subheader("📇 FI's Contacts Directory")
+elif cat_selection == "FI's Contacts":
+    st.subheader("📇 FI's Contacts")
+    
+    # Sub-choice selector for CEO, CIO, and Directors
+    contact_tier = st.radio(
+        "Select Management Tier",
+        ["CEO", "CIO", "Directors"],
+        horizontal=True
+    )
+    st.markdown("---")
+
     @st.cache_data
     def load_fi_contacts():
         try:
@@ -279,11 +290,21 @@ elif cat_selection == "FI_Contacts":
     if "fi_df" not in st.session_state:
         st.session_state.fi_df = load_fi_contacts()
 
-    search_fi = st.text_input("🔍 Search Bank / Executive Name:")
     df_view = st.session_state.fi_df.copy()
+
+    # Filter based on selected tier
+    if contact_tier == "CEO":
+        df_view = df_view[df_view["Category"].str.contains("CEO", case=False, na=False)]
+    elif contact_tier == "CIO":
+        df_view = df_view[df_view["Category"].str.contains("CIO", case=False, na=False)]
+    elif contact_tier == "Directors":
+        df_view = df_view[df_view["Category"].str.contains("Director", case=False, na=False)]
+
+    search_fi = st.text_input("🔍 Search Bank / Executive Name:")
     if search_fi:
         df_view = df_view[df_view.apply(lambda r: r.astype(str).str.contains(search_fi, case=False).any(), axis=1)]
-    st.dataframe(df_view, use_container_width=True, hide_index=True)
+
+    st.dataframe(df_view[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]], use_container_width=True, hide_index=True)
 
 # ====================================================
 # 3. ACCOUNT_MANAGERS
