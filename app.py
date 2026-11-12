@@ -314,4 +314,81 @@ elif cat_selection == "FI's Contacts":
                 st.session_state.fi_df = pd.concat([st.session_state.fi_df, new_row], ignore_index=True)
                 st.success(f"Successfully added contact for **{new_fi_name}**!")
 
-    st.markdown("### ✏️ Edit
+    st.markdown("### Edit Contacts Below")
+
+    df_full = st.session_state.fi_df.copy()
+    if contact_tier == "CEO":
+        mask = df_full["Category"].str.contains("CEO", case=False, na=False)
+    elif contact_tier == "CIO":
+        mask = df_full["Category"].str.contains("CIO", case=False, na=False)
+    elif contact_tier == "Directors":
+        mask = df_full["Category"].str.contains("Director", case=False, na=False)
+    else:
+        mask = pd.Series([True] * len(df_full))
+
+    df_tier = df_full[mask].copy()
+
+    search_fi = st.text_input("🔍 Search Bank / Executive Name:")
+    if search_fi:
+        search_mask = df_tier.apply(lambda r: r.astype(str).str.contains(search_fi, case=False).any(), axis=1)
+        df_tier = df_tier[search_mask]
+
+    edited_tier_df = st.data_editor(
+        df_tier[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]],
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        key=f"fi_editor_{contact_tier}"
+    )
+
+    if not edited_tier_df.equals(df_tier[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]]):
+        df_full.loc[df_tier.index, ["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]] = edited_tier_df.values
+        st.session_state.fi_df = df_full
+
+    st.markdown("---")
+    output_excel = io.BytesIO()
+    with pd.ExcelWriter(output_excel, engine="openpyxl") as writer:
+        for cat in ["CEO", "CIO", "Directors"]:
+            sub_save_df = st.session_state.fi_df[st.session_state.fi_df["Category"].str.contains(cat, case=False, na=False)]
+            sub_save_df[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]].to_excel(writer, sheet_name=cat, index=False)
+    
+    st.download_button(
+        label="💾 Download Updated Contacts File (.xlsx)",
+        data=output_excel.getvalue(),
+        file_name="FI's contacts.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        help="Download this updated file and replace your root folder's 'FI's contacts.xlsx' to permanently save all edits and additions!"
+    )
+
+# ====================================================
+# 3. ACCOUNT_MANAGERS (READ FROM Account Manager  with FI's.xlsx)
+# ====================================================
+elif cat_selection == "Account_Managers":
+    st.subheader("📋 Account Managers & FI Portfolio Management")
+    
+    if "am_df" not in st.session_state:
+        st.session_state.am_df = load_account_managers()
+
+    with st.expander("➕ Add New Account Manager Portfolio Assignment", expanded=False):
+        with st.form("add_am_form", clear_on_submit=True):
+            col_1, col_2 = st.columns(2)
+            with col_1:
+                am_name = st.text_input("Account Manager Name", placeholder="e.g., Meron Wondimu")
+            with col_2:
+                am_bank = st.text_input("Bank / MFI Name", placeholder="e.g., Dashen Bank")
+            
+            submitted_am = st.form_submit_button("Save Assignment")
+            if submitted_am and am_name and am_bank:
+                new_am_row = pd.DataFrame([{
+                    "Account Manager": am_name.strip(),
+                    "Bank/MFI Name": am_bank.strip()
+                }])
+                st.session_state.am_df = pd.concat([st.session_state.am_df, new_am_row], ignore_index=True)
+                st.success(f"Successfully assigned **{am_bank}** to **{am_name}**!")
+
+    st.markdown("### Edit Account Managers Below")
+
+    search_am = st.text_input("🔍 Search Account Manager / Bank Name:")
+    am_view = st.session_state.am_df.copy()
+    if search_am:
+        am_mask = am_view.apply(lambda r: r.astype(str).str.contains(search_am, case=False).
