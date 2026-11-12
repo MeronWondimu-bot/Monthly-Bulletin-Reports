@@ -119,7 +119,6 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
     )
     st.markdown("---")
 
-    # Fully visible radio selector listing all 5 report types explicitly
     st.markdown("**SELECT REPORT TYPE**")
     report_type = st.radio(
         "Select Report Type",
@@ -265,10 +264,10 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
         st.info("Major ATM declined transactions module active.")
 
 # ====================================================
-# 2. FI'S CONTACTS (CEO, CIO, Directors)
+# 2. FI'S CONTACTS (CEO, CIO, Directors) + ADD/EDIT
 # ====================================================
 elif cat_selection == "FI's Contacts":
-    st.subheader("📇 FI's Contacts")
+    st.subheader("📇 FI's Contacts Management")
     
     contact_tier = st.selectbox(
         "Select Management Tier",
@@ -279,6 +278,34 @@ elif cat_selection == "FI's Contacts":
     if "fi_df" not in st.session_state:
         st.session_state.fi_df = load_fi_contacts()
 
+    # Expander to add a new contact
+    with st.expander("➕ Add New FI Contact", expanded=False):
+        with st.form("add_contact_form", clear_on_submit=True):
+            col_a, col_b, col_c = st.columns(3)
+            with col_a:
+                new_fi_name = st.text_input("Bank / FI Name", placeholder="e.g., Abay Bank")
+                new_name = st.text_input("Executive Name", placeholder="e.g., John Doe")
+            with col_b:
+                new_position = st.selectbox("Position / Category", ["CEO", "CIO", "Directors"])
+                new_phone = st.text_input("Phone / Office Number", placeholder="0911000000")
+            with col_c:
+                new_email = st.text_input("Email Address", placeholder="john@bank.com")
+            
+            submitted_contact = st.form_submit_button("Save New Contact")
+            if submitted_contact and new_fi_name and new_name:
+                new_row = pd.DataFrame([{
+                    "FI Name": new_fi_name.strip(),
+                    "Category": new_position.strip(),
+                    "Name": new_name.strip(),
+                    "Position": new_position.strip(),
+                    "Phone/Office Number": new_phone.strip(),
+                    "Email Address": new_email.strip()
+                }])
+                st.session_state.fi_df = pd.concat([st.session_state.fi_df, new_row], ignore_index=True)
+                st.success(f"Successfully added contact for **{new_fi_name}**!")
+
+    st.markdown("### ✏️ Edit Contacts Below (Double-click any cell to edit)")
+    
     df_view = st.session_state.fi_df.copy()
 
     if contact_tier == "CEO":
@@ -292,7 +319,14 @@ elif cat_selection == "FI's Contacts":
     if search_fi:
         df_view = df_view[df_view.apply(lambda r: r.astype(str).str.contains(search_fi, case=False).any(), axis=1)]
 
-    st.dataframe(df_view[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]], use_container_width=True, hide_index=True)
+    # Make table editable directly in the UI
+    edited_df = st.data_editor(
+        df_view[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]],
+        use_container_width=True,
+        hide_index=True,
+        num_rows="dynamic",
+        key="fi_contacts_editor"
+    )
 
 # ====================================================
 # 3. ACCOUNT_MANAGERS
