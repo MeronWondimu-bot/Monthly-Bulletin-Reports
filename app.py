@@ -46,6 +46,20 @@ st.markdown("""
 # ----------------------------------------------------
 # HEADER WITH LOGOS / TITLES
 # ----------------------------------------------------
+col1, col2, col3 = st.columns([1.5, 3, 1.5])
+with col1:
+    st.markdown("### **ETHSWITCH**")
+with col2:
+    st.markdown('<div class="main-title">EthSwitch CRM Dashboard</div>', unsafe_allow_html=True)
+with col3:
+    st.markdown("<h3 style='text-align: right;'>EthioPay</h3>", unsafe_allow_html=True)
+
+st.markdown("""
+    <div class="hero-banner">
+        <div class="hero-title">Performance Reporting & CRM Hub</div>
+        <div class="hero-subtitle">Upload your daily SmartVista source reports and manage FI Contacts, Account Managers, and Issues</div>
+    </div>
+""", unsafe_allow_html=True)
 
 # ----------------------------------------------------
 # TIER 1: MAIN NAVIGATION CATEGORY
