@@ -111,6 +111,82 @@ def process_all_decline_files(files):
     return pd.concat(all_frames, ignore_index=True) if all_frames else None
 
 
+HEADER_MAPPING = {
+    "CBE": "CBE", "BOA": "BOA", "AIB": "Awash", "SINQEE": "Siinqee", "OIB": "Oromia",
+    "DASHEN": "Dashen", "CBO": "CBO", "AMHARA": "Amhara", "ABAY": "Abay", "BRIB": "Berhan",
+    "WEGAGEN": "Wegagen", "WGB": "Wegagen", "UB": "Hibret", "NIB": "NIB", "TSEDAY": "Tseday",
+    "ZEMEN": "Zemen", "BUNNA": "Bunna", "ZAMZAM": "ZamZam", "ADIB": "Addis", "HIJRA": "Hijra",
+    "LION": "Lion", "ENAT": "Enat", "AHADU": "Ahadu", "DGB": "Global", "OB": "Oromia",
+}
+
+
+def extract_success_rate_df(files):
+    success_rows = []
+    for file in files:
+        try:
+            xls = pd.ExcelFile(file)
+            cleaned_name = file.name.split(".")[0].replace("ATM Declined Transaction Report for", "").replace("ATM Success Rate", "").strip()
+            file_date = re.sub(r",\s*", ", ", cleaned_name)
+
+            for sheet_name in xls.sheet_names:
+                df_sheet = pd.read_excel(file, sheet_name=sheet_name)
+                target_row_series = None
+                for idx, row in df_sheet.iterrows():
+                    row_vals_str = " ".join([str(v) for v in row.values if pd.notna(v)]).upper()
+                    if "SUCC" in row_vals_str and "RATE" in row_vals_str:
+                        target_row_series = row
+                        break
+                if target_row_series is not None:
+                    header_idx = None
+                    for h in range(len(df_sheet)):
+                        h_str = " ".join([str(v) for v in df_sheet.iloc[h].values if pd.notna(v)]).upper()
+                        if "CBE" in h_str:
+                            header_idx = h
+                            break
+                    cols = df_sheet.iloc[header_idx].tolist() if header_idx is not None else df_sheet.columns.tolist()
+                    vals = target_row_series.values.tolist()
+
+                    record = {"Bank/Date": file_date}
+                    for c, val in zip(cols, vals):
+                        c_str = re.sub(r"\s+", " ", str(c).strip().upper())
+                        if c_str in HEADER_MAPPING:
+                            try:
+                                raw_num = float(str(val).replace("%", "").strip())
+                                if "%" not in str(val) and 0.0 <= raw_num <= 1.0:
+                                    raw_num = raw_num * 100.0
+                                record[HEADER_MAPPING[c_str]] = round(raw_num, 2)
+                            except Exception:
+                                record[HEADER_MAPPING[c_str]] = None
+                    if len(vals) > 25:
+                        try:
+                            wa_raw = float(str(vals[25]).replace("%", "").strip())
+                            if "%" not in str(vals[25]) and 0.0 <= wa_raw <= 1.0:
+                                wa_raw = wa_raw * 100.0
+                            record["Weighted Average"] = round(wa_raw, 2)
+                        except Exception:
+                            pass
+                    if len(record) > 1:
+                        success_rows.append(record)
+                        break
+        except Exception as e:
+            st.error(f"Error reading {file.name}: {e}")
+
+    if not success_rows:
+        return None
+
+    df_success = pd.DataFrame(success_rows)
+    bank_cols = [c for c in df_success.columns if c not in ["Bank/Date", "Weighted Average"]]
+    ordered_cols = ["Bank/Date"] + bank_cols + (["Weighted Average"] if "Weighted Average" in df_success.columns else [])
+    df_success = df_success[[c for c in ordered_cols if c in df_success.columns]]
+
+    avg_dict = {"Bank/Date": "Average"}
+    for col in [c for c in df_success.columns if c != "Bank/Date"]:
+        mean_val = pd.to_numeric(df_success[col], errors="coerce").mean()
+        avg_dict[col] = round(float(mean_val), 2) if pd.notna(mean_val) else None
+    df_success = pd.concat([df_success, pd.DataFrame([avg_dict])], ignore_index=True)
+    return df_success
+
+
 # ----------------------------------------------------
 # HEADER WITH LOGOS / TITLES
 # ----------------------------------------------------
@@ -138,14 +214,6 @@ cat_selection = st.selectbox(
 )
 
 st.markdown("---")
-
-HEADER_MAPPING = {
-    "CBE": "CBE", "BOA": "BOA", "AIB": "Awash", "SINQEE": "Siinqee", "OIB": "Oromia",
-    "DASHEN": "Dashen", "CBO": "CBO", "AMHARA": "Amhara", "ABAY": "Abay", "BRIB": "Berhan",
-    "WEGAGEN": "Wegagen", "WGB": "Wegagen", "UB": "Hibret", "NIB": "NIB", "TSEDAY": "Tseday",
-    "ZEMEN": "Zemen", "BUNNA": "Bunna", "ZAMZAM": "ZamZam", "ADIB": "Addis", "HIJRA": "Hijra",
-    "LION": "Lion", "ENAT": "Enat", "AHADU": "Ahadu", "DGB": "Global", "OB": "Oromia",
-}
 
 # ====================================================
 # 1. BI-WEEKLY AND MONTHLY PERFORMANCE REPORTS
@@ -218,62 +286,26 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
     elif report_type == "2. ATM Transaction Success Rate Summary":
         st.subheader("📈 ATM Transaction Success Rate Summary")
         if uploaded_files:
-            success_rows = []
-            for file in uploaded_files:
-                try:
-                    xls = pd.ExcelFile(file)
-                    cleaned_name = file.name.split(".")[0].replace("ATM Declined Transaction Report for", "").replace("ATM Success Rate", "").strip()
-                    file_date = re.sub(r",\s*", ", ", cleaned_name)
+            df_success = extract_success_rate_df(uploaded_files)
+            if df_success is not None and not df_success.empty:
+                num_cols = [c for c in df_success.columns if c != "Bank/Date"]
+                formatted_success = df_success.copy()
+                for col in num_cols:
+                    formatted_success[col] = pd.to_numeric(formatted_success[col], errors="coerce").apply(
+                        lambda x: f"{x:.2f}%" if pd.notna(x) else ""
+                    )
 
-                    for sheet_name in xls.sheet_names:
-                        df_sheet = pd.read_excel(file, sheet_name=sheet_name)
-                        target_row_series = None
-                        for idx, row in df_sheet.iterrows():
-                            row_vals_str = " ".join([str(v) for v in row.values if pd.notna(v)]).upper()
-                            if "SUCC" in row_vals_str and "RATE" in row_vals_str:
-                                target_row_series = row
-                                break
-                        if target_row_series is not None:
-                            header_idx = None
-                            for h in range(len(df_sheet)):
-                                h_str = " ".join([str(v) for v in df_sheet.iloc[h].values if pd.notna(v)]).upper()
-                                if "CBE" in h_str:
-                                    header_idx = h
-                                    break
-                            cols = df_sheet.iloc[header_idx].tolist() if header_idx is not None else df_sheet.columns.tolist()
-                            vals = target_row_series.values.tolist()
+                st.dataframe(formatted_success, use_container_width=True, hide_index=True)
 
-                            record = {"Bank/Date": file_date}
-                            for c, val in zip(cols, vals):
-                                c_str = re.sub(r"\s+", " ", str(c).strip().upper())
-                                if c_str in HEADER_MAPPING:
-                                    try:
-                                        record[HEADER_MAPPING[c_str]] = float(str(val).replace("%", "").strip())
-                                    except Exception:
-                                        record[HEADER_MAPPING[c_str]] = None
-                            if len(vals) > 25:
-                                try:
-                                    record["Weighted Average"] = float(str(vals[25]).replace("%", "").strip())
-                                except Exception:
-                                    pass
-                            if len(record) > 1:
-                                success_rows.append(record)
-                                break
-                except Exception as e:
-                    st.error(f"Error reading {file.name}: {e}")
-
-            if success_rows:
-                df_success = pd.DataFrame(success_rows)
-                bank_cols = [c for c in df_success.columns if c not in ["Bank/Date", "Weighted Average"]]
-                ordered_cols = ["Bank/Date"] + bank_cols + (["Weighted Average"] if "Weighted Average" in df_success.columns else [])
-                df_success = df_success[[c for c in ordered_cols if c in df_success.columns]]
-
-                avg_dict = {"Bank/Date": "Average"}
-                for col in [c for c in df_success.columns if c != "Bank/Date"]:
-                    avg_dict[col] = pd.to_numeric(df_success[col], errors="coerce").mean()
-                df_success = pd.concat([df_success, pd.DataFrame([avg_dict])], ignore_index=True)
-
-                st.dataframe(df_success, use_container_width=True)
+                out_succ = io.BytesIO()
+                with pd.ExcelWriter(out_succ, engine="openpyxl") as writer:
+                    formatted_success.to_excel(writer, sheet_name="Success Rate Summary (%)", index=False)
+                st.download_button(
+                    "📥 Download Success Rate Summary (.xlsx)",
+                    out_succ.getvalue(),
+                    "ATM_Success_Rate_Summary.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
             else:
                 st.warning("Could not locate 'SUCC. RATE' rows in the uploaded files.")
         else:
@@ -281,7 +313,49 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
 
     elif report_type == "3. ATM Success Rate Ranking":
         st.subheader("🏆 ATM Success Rate Ranking")
-        st.info("Report 3 is ready for review once Report 2 is locked down.")
+        if uploaded_files:
+            df_success = extract_success_rate_df(uploaded_files)
+            if df_success is not None and not df_success.empty:
+                avg_rows = df_success[df_success["Bank/Date"] == "Average"]
+                source_avg = avg_rows.iloc[0] if not avg_rows.empty else df_success.drop(columns=["Bank/Date"]).mean(numeric_only=True)
+                bank_cols = [c for c in df_success.columns if c not in ["Bank/Date", "Weighted Average"]]
+
+                ranking_rows = []
+                for bank in bank_cols:
+                    val = pd.to_numeric(source_avg.get(bank), errors="coerce")
+                    if pd.notna(val):
+                        ranking_rows.append({
+                            "Participant": bank,
+                            "Average Success Rate (%)": round(float(val), 2),
+                            "vs. 98.5% Target": "Meets Target" if float(val) >= 98.5 else "Below Target"
+                        })
+
+                if ranking_rows:
+                    rank_df = pd.DataFrame(ranking_rows).sort_values(
+                        by="Average Success Rate (%)", ascending=False
+                    ).reset_index(drop=True)
+                    rank_df.insert(0, "Rank", rank_df.index + 1)
+
+                    display_rank = rank_df.copy()
+                    display_rank["Average Success Rate (%)"] = display_rank["Average Success Rate (%)"].apply(lambda x: f"{x:.2f}%")
+
+                    st.dataframe(display_rank, use_container_width=True, hide_index=True)
+
+                    out_rank = io.BytesIO()
+                    with pd.ExcelWriter(out_rank, engine="openpyxl") as writer:
+                        display_rank.to_excel(writer, sheet_name="ATM Success Rate Ranking", index=False)
+                    st.download_button(
+                        "📥 Download Success Rate Ranking (.xlsx)",
+                        out_rank.getvalue(),
+                        "ATM_Success_Rate_Ranking.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+                else:
+                    st.warning("No participant success rate values found to rank.")
+            else:
+                st.warning("Could not locate 'SUCC. RATE' rows in the uploaded files.")
+        else:
+            st.info("👆 Please upload your daily source report files at the top.")
 
     elif report_type == "4. ATM decline contribution by participant":
         st.subheader("👤 ATM Decline Contribution by Participant")
@@ -298,7 +372,72 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
 
     elif report_type == "5. Major ATM declined transactions":
         st.subheader("🔍 Major ATM Declined Transactions")
-        st.info("Major ATM declined transactions module active.")
+        if combined_decline is not None and not combined_decline.empty:
+            rc_col = combined_decline.columns[0]
+            valid_cols = []
+            for c in combined_decline.columns:
+                c_str = str(c).strip().upper()
+                if c != rc_col and "GEDAA" not in c_str and "GADAA" not in c_str and "TOTAL" not in c_str:
+                    clean_name = HEADER_MAPPING.get(c_str, c_str)
+                    if clean_name not in valid_cols:
+                        valid_cols.append(clean_name)
+                        combined_decline.rename(columns={c: clean_name}, inplace=True)
+
+            for col in valid_cols:
+                combined_decline[col] = pd.to_numeric(combined_decline[col], errors="coerce").fillna(0)
+
+            rc_grouped = combined_decline.groupby(rc_col)[valid_cols].sum().reset_index()
+            rc_grouped.rename(columns={rc_col: "Response Code / Decline Reason"}, inplace=True)
+            rc_grouped["Total Declines"] = rc_grouped[valid_cols].sum(axis=1)
+            grand_total = rc_grouped["Total Declines"].sum()
+            rc_grouped["Share (%)"] = rc_grouped["Total Declines"].apply(
+                lambda x: f"{(x / grand_total * 100):.2f}%" if grand_total > 0 else "0.00%"
+            )
+            rc_grouped = rc_grouped.sort_values(by="Total Declines", ascending=False).reset_index(drop=True)
+
+            top_n = st.slider("Show Top Decline Reasons", min_value=5, max_value=max(5, len(rc_grouped)), value=min(10, len(rc_grouped)))
+            major_rc_df = rc_grouped.head(top_n).copy()
+            major_rc_df.insert(0, "Rank", major_rc_df.index + 1)
+
+            for col in valid_cols + ["Total Declines"]:
+                major_rc_df[col] = major_rc_df[col].apply(lambda x: f"{int(float(x)):,}")
+
+            st.markdown("### Top Declined Response Codes")
+            st.dataframe(major_rc_df[["Rank", "Response Code / Decline Reason", "Total Declines", "Share (%)"] + valid_cols], use_container_width=True, hide_index=True)
+
+            bank_contrib = []
+            for col in valid_cols:
+                b_total = pd.to_numeric(combined_decline[col], errors="coerce").fillna(0).sum()
+                top_rc_idx = combined_decline.groupby(rc_col)[col].sum().idxmax() if b_total > 0 else "N/A"
+                top_rc_val = combined_decline.groupby(rc_col)[col].sum().max() if b_total > 0 else 0
+                bank_contrib.append({
+                    "Participant": col,
+                    "Total Declines": int(b_total),
+                    "Share of Total (%)": round(float(b_total / grand_total * 100), 2) if grand_total > 0 else 0.0,
+                    "Top Decline Reason": str(top_rc_idx),
+                    "Top Reason Count": int(top_rc_val)
+                })
+
+            bank_major_df = pd.DataFrame(bank_contrib).sort_values(by="Total Declines", ascending=False).reset_index(drop=True)
+            bank_major_df["Total Declines"] = bank_major_df["Total Declines"].apply(lambda x: f"{x:,}")
+            bank_major_df["Share of Total (%)"] = bank_major_df["Share of Total (%)"].apply(lambda x: f"{x:.2f}%")
+            bank_major_df["Top Reason Count"] = bank_major_df["Top Reason Count"].apply(lambda x: f"{x:,}")
+
+            st.markdown("### Major Decline Drivers by Participant")
+            st.dataframe(bank_major_df, use_container_width=True, hide_index=True)
+
+            out_major = io.BytesIO()
+            with pd.ExcelWriter(out_major, engine="openpyxl") as writer:
+                rc_grouped.to_excel(writer, sheet_name="Top Decline Reasons", index=False)
+                bank_major_df.to_excel(writer, sheet_name="By Participant", index=False)
+            st.download_button(
+                "📥 Download Major Declined Transactions (.xlsx)",
+                out_major.getvalue(),
+                "Major_ATM_Declined_Transactions.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.info("👆 Please upload your daily ATM decline files at the top.")
 
 # ====================================================
 # 2. FI'S CONTACTS
