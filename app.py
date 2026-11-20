@@ -461,6 +461,68 @@ elif cat_selection == "Issue registration and Tracking":
         "Security", "Dispute and Fraud", "Database"
     ]
 
+    issue_cols = [
+        "Issue ID", "Type", "Date Logged", "Entity / Department",
+        "Assigned Department", "Severity", "Description", "Status"
+    ]
+
     if "issues_df" not in st.session_state:
-        st.session_state.issues_df = pd.DataFrame(columns=[
-            "Issue ID", "Type", "Date Logged", "Entity / Department",
+        st.session_state.issues_df = pd.DataFrame(columns=issue_cols)
+    else:
+        for col in issue_cols:
+            if col not in st.session_state.issues_df.columns:
+                st.session_state.issues_df[col] = ""
+        st.session_state.issues_df = st.session_state.issues_df[issue_cols]
+
+    with st.expander(f"➕ Log New {issue_sub}", expanded=True):
+        with st.form(f"form_{issue_sub}", clear_on_submit=True):
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                entity_name = st.text_input("Bank / FI Name" if "Bank" in issue_sub else "Internal Department", placeholder="e.g., Dashen Bank or Network Team")
+                dept = st.selectbox("Assigned Department", DEPARTMENTS)
+            with c2:
+                severity = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
+                status = st.selectbox("Status", ["Open", "In Progress", "Resolved", "Closed"])
+            with c3:
+                log_date = st.date_input("Date Logged", value=date.today())
+
+            description = st.text_area("Issue Description", placeholder="Describe the problem...")
+            submitted = st.form_submit_button("Submit Issue")
+
+            if submitted and entity_name and description:
+                issue_id = f"ISS-{len(st.session_state.issues_df) + 1:03d}"
+                new_row = pd.DataFrame([{
+                    "Issue ID": issue_id,
+                    "Type": issue_sub,
+                    "Date Logged": str(log_date),
+                    "Entity / Department": entity_name.strip(),
+                    "Assigned Department": dept,
+                    "Severity": severity,
+                    "Description": description.strip(),
+                    "Status": status
+                }])
+                st.session_state.issues_df = pd.concat([st.session_state.issues_df, new_row], ignore_index=True)
+                st.success(f"Logged {issue_sub} **{issue_id}** successfully!")
+
+    st.divider()
+    st.subheader(f"📋 {issue_sub} List")
+
+    filtered_issues = st.session_state.issues_df[st.session_state.issues_df["Type"] == issue_sub]
+    st.dataframe(filtered_issues, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+    issues_excel = io.BytesIO()
+    with pd.ExcelWriter(issues_excel, engine="openpyxl") as writer:
+        st.session_state.issues_df.to_excel(writer, sheet_name="All Issues", index=False)
+        for sub_cat in ["1. Bank issue", "2. Internal issue"]:
+            sub_df = st.session_state.issues_df[st.session_state.issues_df["Type"] == sub_cat]
+            safe_sheet = sub_cat[:31]
+            sub_df.to_excel(writer, sheet_name=safe_sheet, index=False)
+
+    st.download_button(
+        label="📥 Download Issues Log (.xlsx)",
+        data=issues_excel.getvalue(),
+        file_name="EthSwitch_Issues_Log.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        help="Download all logged issues (including Bank and Internal issues) as an Excel workbook."
+    )
