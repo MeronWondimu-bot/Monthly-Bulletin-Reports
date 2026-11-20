@@ -58,8 +58,8 @@ def load_account_managers():
     try:
         filename = "Account Manager with FI's.xlsx"
         if not pd.io.common.file_exists(filename):
-            filename = "Account Manager  with FI's.xlsx"
-        
+            filename = "Account Manager with FI's.xlsx"
+
         xls = pd.ExcelFile(filename)
         for sheet in xls.sheet_names:
             df = pd.read_excel(xls, sheet_name=sheet)
@@ -133,7 +133,7 @@ cat_selection = st.selectbox(
         "Bi- weekly and Monthly performance reports",
         "FI's Contacts",
         "Account_Managers",
-        "Issue_Tracking"
+        "Issue registration and Tracking"
     ]
 )
 
@@ -202,7 +202,9 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
 
             display_df = summary_pivot.copy()
             for col in valid_cols + ["Total"]:
-                display_df[col] = display_df[col].apply(lambda x: f"<span style='color: red; font-weight: bold;'>{int(float(x)):,}</span>" if float(x) > 100 else f"{int(float(x)):,}")
+                display_df[col] = display_df[col].apply(
+                    lambda x: f"<span style='color: red; font-weight: bold;'>{int(float(x)):,}</span>" if float(x) > 100 else f"{int(float(x)):,}"
+                )
 
             st.markdown(display_df.to_html(escape=False, index=False), unsafe_allow_html=True)
 
@@ -243,16 +245,16 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
 
                             record = {"Bank/Date": file_date}
                             for c, val in zip(cols, vals):
-                                c_str = re.sub(r'\s+', ' ', str(c).strip().upper())
+                                c_str = re.sub(r"\s+", " ", str(c).strip().upper())
                                 if c_str in HEADER_MAPPING:
                                     try:
                                         record[HEADER_MAPPING[c_str]] = float(str(val).replace("%", "").strip())
-                                    except:
+                                    except Exception:
                                         record[HEADER_MAPPING[c_str]] = None
                             if len(vals) > 25:
                                 try:
                                     record["Weighted Average"] = float(str(vals[25]).replace("%", "").strip())
-                                except:
+                                except Exception:
                                     pass
                             if len(record) > 1:
                                 success_rows.append(record)
@@ -303,7 +305,7 @@ if cat_selection == "Bi- weekly and Monthly performance reports":
 # ====================================================
 elif cat_selection == "FI's Contacts":
     st.subheader("📇 FI's Contacts Management")
-    
+
     contact_tier = st.selectbox(
         "Select Management Tier",
         ["CEO", "CIO", "Directors"]
@@ -324,7 +326,7 @@ elif cat_selection == "FI's Contacts":
                 new_phone = st.text_input("Phone / Office Number", placeholder="0911000000")
             with col_c:
                 new_email = st.text_input("Email Address", placeholder="john@bank.com")
-            
+
             submitted_contact = st.form_submit_button("Save New Contact")
             if submitted_contact and new_fi_name and new_name:
                 new_row = pd.DataFrame([{
@@ -375,7 +377,7 @@ elif cat_selection == "FI's Contacts":
         for cat in ["CEO", "CIO", "Directors"]:
             sub_save_df = st.session_state.fi_df[st.session_state.fi_df["Category"].str.contains(cat, case=False, na=False)]
             sub_save_df[["FI Name", "Name", "Position", "Phone/Office Number", "Email Address"]].to_excel(writer, sheet_name=cat, index=False)
-    
+
     st.download_button(
         label="💾 Download Updated Contacts File (.xlsx)",
         data=output_excel.getvalue(),
@@ -389,7 +391,7 @@ elif cat_selection == "FI's Contacts":
 # ====================================================
 elif cat_selection == "Account_Managers":
     st.subheader("📋 Account Managers & FI Portfolio Management")
-    
+
     if "am_df" not in st.session_state:
         st.session_state.am_df = load_account_managers()
 
@@ -400,7 +402,7 @@ elif cat_selection == "Account_Managers":
                 am_name = st.text_input("Account Manager Name", placeholder="e.g., Meron Wondimu")
             with col_2:
                 am_bank = st.text_input("Bank / MFI Name", placeholder="e.g., Dashen Bank")
-            
+
             submitted_am = st.form_submit_button("Save Assignment")
             if submitted_am and am_name and am_bank:
                 new_am_row = pd.DataFrame([{
@@ -433,7 +435,7 @@ elif cat_selection == "Account_Managers":
     am_excel = io.BytesIO()
     with pd.ExcelWriter(am_excel, engine="openpyxl") as writer:
         st.session_state.am_df.to_excel(writer, sheet_name="Sheet1", index=False)
-    
+
     st.download_button(
         label="💾 Download Updated Account Managers File (.xlsx)",
         data=am_excel.getvalue(),
@@ -443,7 +445,7 @@ elif cat_selection == "Account_Managers":
     )
 
 # ====================================================
-# 4. ISSUE_REGISTRATION AND TRACKING
+# 4. ISSUE REGISTRATION AND TRACKING
 # ====================================================
 elif cat_selection == "Issue registration and Tracking":
     st.subheader("🛠️ Issue Tracking List")
@@ -461,40 +463,4 @@ elif cat_selection == "Issue registration and Tracking":
 
     if "issues_df" not in st.session_state:
         st.session_state.issues_df = pd.DataFrame(columns=[
-            "Issue ID", "Type", "Date Logged", "Entity / Department", "Severity", "Description", "Status"
-        ])
-
-    with st.expander(f"➕ Log New {issue_sub}", expanded=True):
-        with st.form(f"form_{issue_sub}", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                entity_name = st.text_input("Bank / FI Name" if "Bank" in issue_sub else "Internal Department", placeholder="e.g., Dashen Bank or Network Team")
-                dept = st.selectbox("Assigned Department", DEPARTMENTS)
-            with c2:
-                severity = st.selectbox("Severity", ["Low", "Medium", "High", "Critical"])
-                status = st.selectbox("Status", ["Open", "In Progress", "Resolved", "Closed"])
-            with c3:
-                log_date = st.date_input("Date Logged", value=date.today())
-            
-            description = st.text_area("Issue Description", placeholder="Describe the problem...")
-            submitted = st.form_submit_button("Submit Issue")
-            
-            if submitted and entity_name and description:
-                issue_id = f"ISS-{len(st.session_state.issues_df) + 1:03d}"
-                new_row = pd.DataFrame([{
-                    "Issue ID": issue_id,
-                    "Type": issue_sub,
-                    "Date Logged": str(log_date),
-                    "Entity / Department": entity_name.strip(),
-                    "Severity": severity,
-                    "Description": description.strip(),
-                    "Status": status
-                }])
-                st.session_state.issues_df = pd.concat([st.session_state.issues_df, new_row], ignore_index=True)
-                st.success(f"Logged {issue_sub} **{issue_id}** successfully!")
-
-    st.divider()
-    st.subheader(f"📋 {issue_sub} List")
-    
-    filtered_issues = st.session_state.issues_df[st.session_state.issues_df["Type"] == issue_sub]
-    st.dataframe(filtered_issues, use_container_width=True, hide_index=True)
+            "Issue ID", "Type", "Date Logged", "Entity / Department",
